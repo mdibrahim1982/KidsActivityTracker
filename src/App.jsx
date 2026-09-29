@@ -4,10 +4,12 @@ import {
   DEFAULT_CURRENCY,
   DEFAULT_REJECT_PENALTY,
   DEFAULT_ACTIVITY_IDS,
+  ALL_ACTIVITIES,
   CATEGORY_COLORS,
   CHILD_COLORS,
   createChildRecord,
   newChildId,
+  createCustomActivity,
   resolveActivities,
   getActivityById,
   rewardFor,
@@ -81,6 +83,7 @@ function normalizeState(raw) {
   if (!s.kids || typeof s.kids !== 'object') s.kids = {}
   if (s.rewardRate == null) s.rewardRate = DEFAULT_REWARD
   if (!s.unlockTimes || typeof s.unlockTimes !== 'object') s.unlockTimes = {}
+  if (!s.customActivities || typeof s.customActivities !== 'object') s.customActivities = {}
   if (s.parentPasscode == null) s.parentPasscode = ''
   return s
 }
@@ -111,9 +114,30 @@ function saveState(uid, state) {
   }
 }
 
-// A child's ordered, resolved activity list.
-function actsOf(kid) {
-  return resolveActivities(kid?.activityIds)
+// A child's ordered, resolved activity list. Pass a catalog (see
+// makeCatalog below) so a family's own custom activities resolve too —
+// without one, only the built-in defaults + suggestion library resolve.
+function actsOf(kid, catalog) {
+  return catalog ? catalog.resolve(kid?.activityIds) : resolveActivities(kid?.activityIds)
+}
+
+// Merges a family's custom activities on top of the built-in catalog, so
+// the rest of the app can look activities up by id (or resolve a child's
+// activityIds) without caring which list an id came from.
+function makeCatalog(customList) {
+  const list = [...ALL_ACTIVITIES, ...customList]
+  const byId = {}
+  list.forEach((a) => {
+    byId[a.id] = a
+  })
+  return {
+    list,
+    getById: (id) => byId[id] || null,
+    resolve: (ids) => {
+      const use = Array.isArray(ids) && ids.length ? ids : DEFAULT_ACTIVITY_IDS
+      return use.map((id) => byId[id]).filter(Boolean)
+    },
+  }
 }
 
 // Closing a day only turns leftover "pending" rows into "missed" —
@@ -126,9 +150,9 @@ function closeDay(day) {
   return { ...day, activities, locked: true }
 }
 
-function ensureToday(kidDataIn, todayId) {
+function ensureToday(kidDataIn, todayId, catalog) {
   const kidData = ensureDebtField(kidDataIn)
-  const acts = actsOf(kidData)
+  const acts = actsOf(kidData, catalog)
   const days = { ...(kidData.days || {}) }
   const weeks = { ...(kidData.weeks || {}) }
 
@@ -306,6 +330,7 @@ function FamilyApp({ user, onSignOut }) {
   const [parentUnlocked, setParentUnlocked] = useState(false)
   const [manageChildrenOpen, setManageChildrenOpen] = useState(false)
   const [cloudStatus, setCloudStatus] = useState(IS_LOCAL_DEV ? 'local' : 'connecting') // 'connecting' | 'synced' | 'offline' | 'local'
+  const [showScrollTop, setShowScrollTop] = useState(false)
   const bucketRefs = useRef({})
   const importInputRef = useRef(null)
   const stateRef = useRef(state)
@@ -320,6 +345,11 @@ function FamilyApp({ user, onSignOut }) {
   const currency = state.currency || DEFAULT_CURRENCY
   const unlockTimes = state.unlockTimes || {}
   const parentPasscode = state.parentPasscode || ''
+  // Family's own custom activities layered onto the built-in catalog — see
+  // makeCatalog. Recomputed only when the custom list actually changes.
+  const customActivities = state.customActivities || {}
+  const customList = useMemo(() => Object.values(customActivities), [customActivities])
+  const catalog = useMemo(() => makeCatalog(customList), [customList])
 
   // Every child, as a plain array with everything the UI needs (id, name,
   // age, grade, color, initial) — the source of truth for a child's
@@ -342,6 +372,21 @@ function FamilyApp({ user, onSignOut }) {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // Shows a "back to top" button once the page has been scrolled down a
+  // bit — this page can get long (activities + suggestions + history).
+  useEffect(() => {
+    function onScroll() {
+      setShowScrollTop(window.scrollY > 400)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   function handleParentLogout() {
     setLoggedInKid(null)
@@ -419,6 +464,17 @@ function FamilyApp({ user, onSignOut }) {
     })
   }
 
+  // Saves a brand-new, family-wide custom activity and immediately adds it
+  // to the child currently open in the Activities tab. It stays available
+  // afterwards to add to any other child too (see ActivityManager).
+  function addCustomActivity({ label, category, hint, fixedCredit }) {
+    const trimmed = String(label || '').trim()
+    if (!trimmed) return
+    const activity = createCustomActivity({ label: trimmed, category, hint, fixedCredit })
+    setState((prev) => ({ ...prev, customActivities: { ...(prev.customActivities || {}), [activity.id]: activity } }))
+    addActivityToKid(activity.id)
+  }
+
   // value === null clears the parent's own reward, going back to the default.
   function setActivityReward(activityId, value) {
     updateActiveKid((kid) => {
@@ -451,7 +507,7 @@ function FamilyApp({ user, onSignOut }) {
     setState((prev) => {
       const next = { ...prev, kids: { ...prev.kids } }
       Object.keys(prev.kids || {}).forEach((id) => {
-        next.kids[id] = ensureToday(prev.kids[id], todayId)
+        next.kids[id] = ensureToday(prev.kids[id], todayId, catalog)
       })
       return next
     })
@@ -567,7 +623,7 @@ function FamilyApp({ user, onSignOut }) {
   // This child's own activities (parents can add/remove them, see the
   // Parent tab). withAllActivities guards the very first render too, so a
   // saved day missing a newly added activity can never crash the render.
-  const activities = useMemo(() => resolveActivities(kidData?.activityIds), [kidData?.activityIds])
+  const activities = useMemo(() => catalog.resolve(kidData?.activityIds), [kidData?.activityIds, catalog])
   const day = withAllActivities(kidData?.days?.[todayId] || blankDay(activities), activities)
   const week = kidData?.weeks?.[weekId] || blankWeek(activities)
   // What one coin of this activity is worth for this child.
@@ -665,7 +721,7 @@ function FamilyApp({ user, onSignOut }) {
   function completeActivity(activityId, status, time, originEl, credit = rate) {
     setState((prev) => {
       const kid = ensureDebtField(prev.kids[activeKid])
-      const acts = actsOf(kid)
+      const acts = actsOf(kid, catalog)
       const currentDay = withAllActivities(kid.days[todayId] || blankDay(acts), acts)
       if (currentDay.locked) return prev
       if (currentDay.activities[activityId]?.status !== 'pending') return prev
@@ -703,7 +759,7 @@ function FamilyApp({ user, onSignOut }) {
       }
     })
     if (status === 'done' && originEl) {
-      const activity = getActivityById(activityId)
+      const activity = catalog.getById(activityId)
       const tipText = activity && getCategoryTip(activity.category)
       if (tipText) {
         setTip({ text: tipText, key: `${activityId}-${Date.now()}` })
@@ -717,12 +773,57 @@ function FamilyApp({ user, onSignOut }) {
     }
   }
 
+  // A kid can take back an accidental tap: only while the day is still open
+  // and before a parent has approved/rejected it in the day-end review —
+  // once either of those happens, it's final.
+  function undoActivity(activityId) {
+    setState((prev) => {
+      const kid = ensureDebtField(prev.kids[activeKid])
+      const acts = actsOf(kid, catalog)
+      const currentDay = withAllActivities(kid.days[todayId] || blankDay(acts), acts)
+      if (currentDay.locked) return prev
+      const entry = currentDay.activities[activityId]
+      if (!entry || entry.status !== 'done' || entry.reviewed) return prev
+
+      const earnedCredit = entry.credit || 0
+      const nextDay = {
+        ...currentDay,
+        activities: {
+          ...currentDay.activities,
+          [activityId]: { status: 'pending', time: '', reviewed: null, credit: 0, penalty: 0 },
+        },
+      }
+      const currentWeek = kid.weeks[weekId] || blankWeek(acts)
+      const nextWeek = {
+        cash: Math.max(0, currentWeek.cash - earnedCredit),
+        activities: { ...currentWeek.activities, [activityId]: Math.max(0, (currentWeek.activities[activityId] || 0) - 1) },
+        activityCash: {
+          ...currentWeek.activityCash,
+          [activityId]: Math.max(0, (currentWeek.activityCash[activityId] || 0) - earnedCredit),
+        },
+      }
+      return {
+        ...prev,
+        kids: {
+          ...prev.kids,
+          [activeKid]: { ...kid, days: { ...kid.days, [todayId]: nextDay }, weeks: { ...kid.weeks, [weekId]: nextWeek } },
+        },
+      }
+    })
+  }
+
+
+  // A timed activity's on-time target is a family-wide override (same
+  // mechanism as a "simple" activity's unlock time) if the parent set one,
+  // else the activity's own built-in default (see the Activities tab).
+  const timedTargetOf = (a) => unlockTimes[a.id] ?? a.target
+
   // "Push Now": on-time press earns the full coin; a press after the
   // deadline is simply missed (no coin, no penalty) — a genuinely late
   // prayer should instead be logged with the "Late Comer" button below.
   function pressTimedButton(activity, e) {
     const pressedAt = new Date()
-    const deadline = deadlineDate(todayId, activity.target, activity.graceMinutes || 0)
+    const deadline = deadlineDate(todayId, timedTargetOf(activity), activity.graceMinutes || 0)
     const status = pressedAt <= deadline ? 'done' : 'missed'
     const timeStr = pressedAt.toTimeString().slice(0, 8)
     completeActivity(activity.id, status, timeStr, e.currentTarget, rewardOf(activity))
@@ -732,13 +833,16 @@ function FamilyApp({ user, onSignOut }) {
   // than the on-time reward, in case a parent lowered that.
   const lateCreditOf = (a) => Math.min(a.lateCredit ?? 0, rewardOf(a))
 
-  // "Late Comer": self-report that the prayer happened, just after the
-  // deadline but before the activity's own lateDeadline (e.g. 7:00 AM for
-  // Fajr). Always counts as done, but for a smaller, fixed credit
-  // (`lateCredit`) instead of the full per-coin rate.
+  // The late window is always exactly 30 minutes after the on-time target
+  // (not separately configurable) — moving the target moves this with it.
+  const lateDeadlineOf = (a) => deadlineDate(todayId, timedTargetOf(a), 30)
+
+  // "Late Comer": self-report that the prayer happened, within 30 minutes
+  // after the on-time target. Always counts as done, but for a smaller,
+  // fixed credit (`lateCredit`) instead of the full per-coin reward.
   function pressLateButton(activity, e) {
     const pressedAt = new Date()
-    if (activity.lateDeadline && pressedAt >= deadlineDate(todayId, activity.lateDeadline, 0)) return
+    if (activity.lateLabel && pressedAt >= lateDeadlineOf(activity)) return
     const timeStr = pressedAt.toTimeString().slice(0, 8)
     completeActivity(activity.id, 'done', timeStr, e.currentTarget, lateCreditOf(activity))
   }
@@ -746,7 +850,7 @@ function FamilyApp({ user, onSignOut }) {
   function lockDay() {
     setState((prev) => {
       const kid = prev.kids[activeKid]
-      const acts = actsOf(kid)
+      const acts = actsOf(kid, catalog)
       const currentDay = withAllActivities(kid.days[todayId] || blankDay(acts), acts)
       if (currentDay.locked) return prev
       return {
@@ -773,7 +877,7 @@ function FamilyApp({ user, onSignOut }) {
   function approveEntry(activityId) {
     setState((prev) => {
       const kid = prev.kids[activeKid]
-      const acts = actsOf(kid)
+      const acts = actsOf(kid, catalog)
       const currentDay = withAllActivities(kid.days[todayId] || blankDay(acts), acts)
       const entry = currentDay.activities[activityId]
       if (!entry || entry.status !== 'done') return prev
@@ -795,7 +899,7 @@ function FamilyApp({ user, onSignOut }) {
   function rejectEntry(activityId) {
     setState((prev) => {
       const kid = ensureDebtField(prev.kids[activeKid])
-      const acts = actsOf(kid)
+      const acts = actsOf(kid, catalog)
       const currentDay = withAllActivities(kid.days[todayId] || blankDay(acts), acts)
       const entry = currentDay.activities[activityId]
       if (!entry || entry.status !== 'done') return prev
@@ -859,7 +963,7 @@ function FamilyApp({ user, onSignOut }) {
         ...prev,
         kids: {
           ...prev.kids,
-          [activeKid]: { ...kid, weeks: { ...kid.weeks, [weekId]: blankWeek(actsOf(kid)) }, debt: remainingDebt },
+          [activeKid]: { ...kid, weeks: { ...kid.weeks, [weekId]: blankWeek(actsOf(kid, catalog)) }, debt: remainingDebt },
         },
       }
     })
@@ -872,7 +976,7 @@ function FamilyApp({ user, onSignOut }) {
   function adminResetToday() {
     setState((prev) => {
       const kid = ensureDebtField(prev.kids[activeKid])
-      const acts = actsOf(kid)
+      const acts = actsOf(kid, catalog)
       const currentDay = withAllActivities(kid.days[todayId] || blankDay(acts), acts)
       const currentWeek = kid.weeks[weekId] || blankWeek(acts)
       const nextWeek = {
@@ -1114,12 +1218,14 @@ function FamilyApp({ user, onSignOut }) {
                 kid={activeKidInfo}
                 record={kidData}
                 activities={activities}
+                catalog={catalog}
                 rate={rate}
                 globalUnlockTimes={unlockTimes}
                 onAdd={addActivityToKid}
                 onRemove={removeActivityFromKid}
                 onReward={setActivityReward}
                 onUnlockTime={setUnlockTime}
+                onCreateCustom={addCustomActivity}
               />
             </>
           )}
@@ -1235,12 +1341,10 @@ function FamilyApp({ user, onSignOut }) {
               const timeReached = hasReachedTime(now, todayId, unlockTime)
               const pastDeadline =
                 activity.control === 'timedPush'
-                  ? now >= deadlineDate(todayId, activity.target, activity.graceMinutes || 0)
+                  ? now >= deadlineDate(todayId, timedTargetOf(activity), activity.graceMinutes || 0)
                   : false
               const pastLateDeadline =
-                activity.control === 'timedPush' && activity.lateDeadline
-                  ? now >= deadlineDate(todayId, activity.lateDeadline, 0)
-                  : false
+                activity.control === 'timedPush' && activity.lateLabel ? now >= lateDeadlineOf(activity) : false
               return (
                 <ActivityCard
                   key={activity.id}
@@ -1257,6 +1361,15 @@ function FamilyApp({ user, onSignOut }) {
                   now={now}
                   onPressTimed={(e) => pressTimedButton(activity, e)}
                   onPressLate={(e) => pressLateButton(activity, e)}
+                  onUndo={
+                    unlocked && entry.status === 'done' && !entry.reviewed
+                      ? () => {
+                          if (window.confirm(`Undo "${activity.label}"? The coin will be taken back.`)) {
+                            undoActivity(activity.id)
+                          }
+                        }
+                      : null
+                  }
                   onSimple={(e) =>
                     completeActivity(
                       activity.id,
@@ -1312,6 +1425,11 @@ function FamilyApp({ user, onSignOut }) {
           onFinish={finishReview}
           onCancel={() => setReviewOpen(false)}
         />
+      )}
+      {showScrollTop && (
+        <button type="button" className="scroll-top-btn" onClick={scrollToTop} aria-label="Scroll to top">
+          ⬆
+        </button>
       )}
     </div>
     </CurrencyContext.Provider>
@@ -1377,7 +1495,7 @@ function Bucket({ activity, coins, cash, bucketRef }) {
   )
 }
 
-function ActivityCard({ activity, entry, unlocked, locked, timeReached, unlockTime, reward, lateCredit, pastDeadline, pastLateDeadline, now, onPressTimed, onPressLate, onSimple }) {
+function ActivityCard({ activity, entry, unlocked, locked, timeReached, unlockTime, reward, lateCredit, pastDeadline, pastLateDeadline, now, onPressTimed, onPressLate, onSimple, onUndo }) {
   const cur = useCurrency()
   const colors = CATEGORY_COLORS[activity.category] || CATEGORY_COLORS.discipline
   const timeGated = activity.control === 'simple' && entry.status === 'pending' && !timeReached
@@ -1446,6 +1564,11 @@ function ActivityCard({ activity, entry, unlocked, locked, timeReached, unlockTi
         credit={entry.credit}
         unlockTime={unlockTime && formatTimeLabel(unlockTime)}
       />
+      {onUndo && (
+        <button type="button" className="undo-btn" onClick={onUndo}>
+          ↩️ Oops, undo
+        </button>
+      )}
     </div>
   )
 }

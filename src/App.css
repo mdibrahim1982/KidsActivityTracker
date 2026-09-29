@@ -1673,6 +1673,76 @@ body {
 .am-others { margin-top: 12px; }
 .am-others summary { font-size: 12px; color: #6B6254; cursor: pointer; margin-bottom: 8px; }
 
+/* Kid-facing "undo" on a just-completed activity, before it's reviewed */
+.undo-btn {
+  margin-top: 6px;
+  border: none;
+  background: none;
+  color: #857C6C;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.undo-btn:hover { color: var(--coral); }
+
+/* Floating "back to top" button */
+.scroll-top-btn {
+  position: fixed;
+  right: 18px;
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--teal);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 6px 16px rgba(20, 30, 28, 0.28);
+  cursor: pointer;
+  z-index: 40;
+}
+.scroll-top-btn:hover { background: #185956; }
+
+/* Custom-activity creation form (Activities tab, suggestions panel) */
+.am-custom-toggle {
+  width: 100%;
+  border: 1.5px dashed var(--teal);
+  background: #F1F8F7;
+  color: var(--teal);
+  border-radius: 10px;
+  padding: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.am-custom-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.am-custom-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: #6B6254; }
+.am-custom-form input,
+.am-custom-form select {
+  padding: 8px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  background: #fff;
+}
+.am-custom-row { display: flex; gap: 10px; }
+.am-custom-row label { flex: 1; }
+.am-custom-note { font-size: 10.5px; color: #857C6C; margin: 0; }
+
 @media (max-width: 900px) {
   .activity-manager { grid-template-columns: 1fr; }
   .am-side { position: static; max-height: none; }
@@ -1842,4 +1912,6 @@ body {
   .am-row .am-field > span:first-child { min-width: 96px; }
   .parent-subtab { padding: 8px 11px; font-size: 12.5px; }
   .activity-reward { font-size: 10px; padding: 1px 6px; }
+  .am-custom-row { flex-direction: column; }
+  .scroll-top-btn { width: 40px; height: 40px; font-size: 16px; right: 14px; }
 }
