@@ -7,7 +7,7 @@ export default defineConfig({
   // sub-path (e.g. GitHub Pages) or opened as a static file — an absolute
   // base is a common cause of a blank/black screen on a phone where the
   // JS/CSS bundle silently 404s.
-  base: '/Kids_Activity_Traker/',
+  base: './',
   build: {
     // A production build (npm run build) transpiles down to this target,
     // widening the range of tablet/phone browsers (especially older
