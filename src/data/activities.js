@@ -28,8 +28,10 @@ export const ACTIVITIES = [
     target: '06:00',
     lateLabel: 'Late Comer 🐢',
     lateCredit: 3,
-    lateDeadline: '07:00',
-    hint: 'Push "Push Now" by 6:00 AM for the full reward, or "Late Comer" between 6:00–7:00 AM for a smaller one. Closes after 7:00 AM.',
+    // No lateDeadline here — the late window is always target + 30 minutes,
+    // computed in App.jsx, so a parent changing the target time (below)
+    // automatically moves the late window with it.
+    hint: 'Push "Push Now" by the target time for the full reward, or "Late Comer" within 30 minutes after for a smaller one. A parent can change the target time from the Activities tab.',
   },
   {
     id: 'quran',
@@ -406,9 +408,37 @@ export const ACTIVITY_LIBRARY = [
   { id: 'lib_share', label: 'Share Nicely', category: 'kindness', icon: '🧸', hint: 'Take turns and share with others.', fixedCredit: 2, minAge: 4, maxAge: 9, ...done() },
 ]
 
-// Everything a child could have: the defaults plus the library.
+// Everything a child could have: the defaults plus the library. A family's
+// own custom activities (see createCustomActivity below) are layered on
+// top of this at runtime in App.jsx (see makeCatalog) — they aren't part
+// of this static list since they're saved data, not code.
 export const ALL_ACTIVITIES = [...ACTIVITIES, ...ACTIVITY_LIBRARY]
 export const DEFAULT_ACTIVITY_IDS = ACTIVITIES.map((a) => a.id)
+
+export function newCustomActivityId() {
+  return 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+}
+
+// A parent-made activity — same shape as anything in ACTIVITY_LIBRARY, so it
+// works everywhere a built-in one does (rewards, drag-and-drop, tips, the
+// Weeks table). Always a simple tap-to-claim button; no minAge/maxAge/
+// minGrade/maxGrade, so it's always shown as "Recommended" (a parent who
+// made it presumably wants it offered to their other children too).
+export function createCustomActivity({ label, category, hint, fixedCredit }) {
+  const trimmedLabel = String(label || '').trim()
+  const cat = CATEGORY_COLORS[category] ? category : 'discipline'
+  const credit = Number(fixedCredit)
+  return {
+    id: newCustomActivityId(),
+    label: trimmedLabel,
+    category: cat,
+    control: 'simple',
+    buttonLabel: `${trimmedLabel} ✅`,
+    hint: String(hint || '').trim(),
+    fixedCredit: Number.isFinite(credit) && credit >= 0 ? credit : undefined,
+    custom: true,
+  }
+}
 
 const ACTIVITY_BY_ID = ALL_ACTIVITIES.reduce((m, a) => {
   m[a.id] = a
