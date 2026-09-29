@@ -1,13 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import {
-  ALL_ACTIVITIES,
-  CATEGORY_COLORS,
-  CATEGORY_LABELS,
-  getActivityById,
-  isSuggestedFor,
-  rewardFor,
-  formatTimeLabel,
-} from '../data/activities.js'
+import { CATEGORY_COLORS, CATEGORY_LABELS, isSuggestedFor, rewardFor } from '../data/activities.js'
 import { useCurrency } from '../CurrencyContext.js'
 
 const REMOVE_PREFIX = 'remove:'
@@ -59,23 +51,28 @@ export default function ActivityManager({
   kid,
   record,
   activities,
+  catalog,
   rate,
   globalUnlockTimes,
   onAdd,
   onRemove,
   onReward,
   onUnlockTime,
+  onCreateCustom,
 }) {
   const cur = useCurrency()
   const [overMain, setOverMain] = useState(false)
   const [overSide, setOverSide] = useState(false)
   const [category, setCategory] = useState('all')
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customForm, setCustomForm] = useState({ label: '', category: 'chores', hint: '', fixedCredit: String(rate) })
+  const [customError, setCustomError] = useState('')
 
   const activeIds = useMemo(() => activities.map((a) => a.id), [activities])
 
   const available = useMemo(
-    () => ALL_ACTIVITIES.filter((a) => !activeIds.includes(a.id)),
-    [activeIds],
+    () => catalog.list.filter((a) => !activeIds.includes(a.id)),
+    [activeIds, catalog],
   )
   const recommended = available.filter((a) => isSuggestedFor(a, kid))
   const others = available.filter((a) => !isSuggestedFor(a, kid))
@@ -92,12 +89,30 @@ export default function ActivityManager({
   const dailyMax = activities.reduce((n, a) => n + rewardFor(record, a, rate), 0)
   const canRemove = activities.length > 1
 
+  function submitCustom(e) {
+    e.preventDefault()
+    const label = customForm.label.trim()
+    if (!label) {
+      setCustomError('Give it a name.')
+      return
+    }
+    const credit = Number(customForm.fixedCredit)
+    if (!Number.isFinite(credit) || credit < 0) {
+      setCustomError('Reward must be a number, 0 or more.')
+      return
+    }
+    onCreateCustom({ label, category: customForm.category, hint: customForm.hint, fixedCredit: credit })
+    setCustomForm({ label: '', category: customForm.category, hint: '', fixedCredit: String(rate) })
+    setCustomError('')
+    setCustomOpen(false)
+  }
+
   function handleDropOnMain(e) {
     e.preventDefault()
     setOverMain(false)
     const id = e.dataTransfer.getData('text/plain')
     if (!id || id.startsWith(REMOVE_PREFIX)) return
-    if (getActivityById(id) && !activeIds.includes(id)) onAdd(id)
+    if (catalog.getById(id) && !activeIds.includes(id)) onAdd(id)
   }
 
   function handleDropOnSide(e) {
@@ -109,7 +124,7 @@ export default function ActivityManager({
   }
 
   function requestRemove(id) {
-    const a = getActivityById(id)
+    const a = catalog.getById(id)
     if (!a) return
     if (!canRemove) {
       window.alert('A child needs at least one activity.')
@@ -229,28 +244,22 @@ export default function ActivityManager({
                   )}
                 </div>
 
-                {isTimed ? (
-                  <div className="am-field am-field-note">
-                    <span>Deadline</span>
-                    <small>{formatTimeLabel(a.target)} (built in)</small>
-                  </div>
-                ) : (
-                  <div className="am-field">
-                    <span>Show button after (all children)</span>
-                    <input
-                      className="am-time-input"
-                      type="time"
-                      value={unlock}
-                      aria-label={`${a.label}: show button after`}
-                      onChange={(e) => onUnlockTime(a.id, e.target.value)}
-                    />
-                    {unlockOverridden && (
-                      <button type="button" className="am-reset" onClick={() => onUnlockTime(a.id, null)}>
-                        ↺ default
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div className="am-field">
+                  <span>{isTimed ? 'On-time by (all children)' : 'Show button after (all children)'}</span>
+                  <input
+                    className="am-time-input"
+                    type="time"
+                    value={unlock}
+                    aria-label={`${a.label}: ${isTimed ? 'on-time by' : 'show button after'}`}
+                    onChange={(e) => onUnlockTime(a.id, e.target.value)}
+                  />
+                  {unlockOverridden && (
+                    <button type="button" className="am-reset" onClick={() => onUnlockTime(a.id, null)}>
+                      ↺ default
+                    </button>
+                  )}
+                  {isTimed && a.lateLabel && <small>+30 min late window after this</small>}
+                </div>
 
                 <button
                   type="button"
@@ -290,6 +299,71 @@ export default function ActivityManager({
             {kid.grade ? `, ${kid.grade}` : ''}
           </small>
         </div>
+
+        <button type="button" className="am-custom-toggle" onClick={() => setCustomOpen((v) => !v)}>
+          {customOpen ? '✕ Cancel' : `➕ Create a custom activity for ${kid.name}`}
+        </button>
+
+        {customOpen && (
+          <form className="am-custom-form" onSubmit={submitCustom}>
+            <label>
+              <span>Activity name</span>
+              <input
+                type="text"
+                value={customForm.label}
+                onChange={(e) => setCustomForm({ ...customForm, label: e.target.value })}
+                placeholder="e.g. Feed the fish"
+                autoFocus
+              />
+            </label>
+            <div className="am-custom-row">
+              <label>
+                <span>Category</span>
+                <select
+                  value={customForm.category}
+                  onChange={(e) => setCustomForm({ ...customForm, category: e.target.value })}
+                >
+                  {Object.keys(CATEGORY_LABELS).map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Reward</span>
+                <span className="am-reward-wrap">
+                  <span className="am-cur">{cur}</span>
+                  <input
+                    className="am-reward-input"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    inputMode="decimal"
+                    value={customForm.fixedCredit}
+                    onChange={(e) => setCustomForm({ ...customForm, fixedCredit: e.target.value })}
+                  />
+                </span>
+              </label>
+            </div>
+            <label>
+              <span>Hint (optional)</span>
+              <input
+                type="text"
+                value={customForm.hint}
+                onChange={(e) => setCustomForm({ ...customForm, hint: e.target.value })}
+                placeholder="Shown under the activity name"
+              />
+            </label>
+            {customError && <p className="login-error">{customError}</p>}
+            <button type="submit" className="btn btn-done">
+              Add to {kid.name}'s list
+            </button>
+            <p className="am-custom-note">
+              Saved for your whole family — you can add it to your other children too.
+            </p>
+          </form>
+        )}
 
         <div className="am-chips" role="tablist" aria-label="Filter suggestions by category">
           {categories.map((c) => (
