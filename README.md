@@ -85,14 +85,20 @@ Pick a child with the tabs at the top, then:
 
 - **Left: the child's activities** — the box you drop things into. Each row
   has that activity's **reward** (what one coin is worth for this child) and
-  a **"show button after"** time (leave empty for always available; this
-  time is shared by all children since prayer times are the same for
-  everyone). Fajr keeps its built-in deadlines.
-- **Right: suggested activities** — ready-made ideas (chores, health,
+  a time field — **"show button after"** for most activities (leave empty
+  for always available), or **"on-time by"** for Fajr. All of these times
+  are shared by every child, since prayer times are the same for everyone.
+  Fajr's "Late Comer" window is always the 30 minutes right after its
+  on-time time — move the time and the late window moves with it.
+- **Right: suggested activities** — 31 ready-made ideas (chores, health,
   study, deen, creative, kindness) with a suggested reward. They are sorted
   into **Recommended for this child** and **Other ideas** using the child's
   **age and grade** (grade is worked out from age, or age from grade, if only
   one is entered). Filter by category with the chips.
+- **➕ Create a custom activity** (above the suggestions) lets you add your
+  own — a name, category, optional hint, and a reward. It's saved for the
+  whole family and immediately added to the child you're viewing; you can
+  add it to your other children the same way you add any suggestion.
 - **Drag** a suggestion into the left box to add it, or tap **＋** (this is
   what works on phones/tablets, where dragging is unreliable). Drag a row
   from the list back onto the suggestions panel — or press **✕** — to
@@ -105,12 +111,17 @@ Pick a child with the tabs at the top, then:
 - Every activity is independent — none depends on another.
 - Tapping an activity records the time and credits its reward to that
   activity's bucket right away, after a short Hadith/tip pop-up.
+- **↩️ Oops, undo** appears on a just-tapped activity so a kid can take back
+  an accidental press — it disappears once a parent has approved/rejected
+  that coin, or once the day is locked, whichever comes first.
 - **Lock day & finish** (parent code) opens the review: **approve or reject**
   each coin. Rejecting takes the coin back **and** adds a penalty (Settings)
   that carries forward until paid off. Unreviewed coins stay approved.
 - **Pay & empty buckets** clears the week after you hand over the reward;
   any carried-forward penalty is deducted first.
 - **Reset Today** (parent code) clears today for the current child.
+- A **⬆ back-to-top button** appears in the corner once you've scrolled down
+  — handy once a child's activity list gets long.
 
 ## Bringing over the original data (one time)
 
