@@ -125,7 +125,10 @@ function actsOf(kid, catalog) {
 // the rest of the app can look activities up by id (or resolve a child's
 // activityIds) without caring which list an id came from.
 function makeCatalog(customList) {
-  const list = [...ALL_ACTIVITIES, ...customList]
+  // Custom activities first, so a newly created one shows up at the top of
+  // the suggestions panel (under Recommended) instead of buried below the
+  // whole built-in library.
+  const list = [...customList, ...ALL_ACTIVITIES]
   const byId = {}
   list.forEach((a) => {
     byId[a.id] = a
@@ -464,15 +467,14 @@ function FamilyApp({ user, onSignOut }) {
     })
   }
 
-  // Saves a brand-new, family-wide custom activity and immediately adds it
-  // to the child currently open in the Activities tab. It stays available
-  // afterwards to add to any other child too (see ActivityManager).
+  // Saves a brand-new, family-wide custom activity into the suggestions
+  // panel — it is NOT auto-added to any child, so it behaves exactly like
+  // a built-in suggestion: drag it into a child's list (or tap +).
   function addCustomActivity({ label, category, hint, fixedCredit }) {
     const trimmed = String(label || '').trim()
     if (!trimmed) return
     const activity = createCustomActivity({ label: trimmed, category, hint, fixedCredit })
     setState((prev) => ({ ...prev, customActivities: { ...(prev.customActivities || {}), [activity.id]: activity } }))
-    addActivityToKid(activity.id)
   }
 
   // value === null clears the parent's own reward, going back to the default.
@@ -1567,7 +1569,6 @@ function ActivityCard({
             lateCredit={lateCredit}
             targetLabel={targetLabel}
             lateDeadlineLabel={lateDeadlineLabel}
-            now={now}
             onPress={onPressTimed}
             onPressLate={onPressLate}
           />
@@ -1607,7 +1608,6 @@ function TimedPushControl({
   lateCredit,
   targetLabel,
   lateDeadlineLabel,
-  now,
   onPress,
   onPressLate,
 }) {
@@ -1625,7 +1625,6 @@ function TimedPushControl({
 
   return (
     <div className="timed-push">
-      {pending && unlocked && <span className="live-clock">{now.toTimeString().slice(0, 8)}</span>}
       <div className="timed-push-buttons">
         <button className="btn btn-done" disabled={pushDisabled} onClick={onPress}>
           Push Now

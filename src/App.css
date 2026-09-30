@@ -863,16 +863,6 @@ body {
   width: 100%;
 }
 
-.live-clock {
-  font-family: 'Fredoka', sans-serif;
-  font-variant-numeric: tabular-nums;
-  font-size: 15px;
-  background: #EAF1F8;
-  color: #2E4E70;
-  padding: 5px 10px;
-  border-radius: 8px;
-}
-
 .deadline-note { font-size: 11px; color: #857C6C; }
 
 .time-gate-note {
