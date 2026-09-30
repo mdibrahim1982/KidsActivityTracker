@@ -836,6 +836,7 @@ function FamilyApp({ user, onSignOut }) {
   // The late window is always exactly 30 minutes after the on-time target
   // (not separately configurable) — moving the target moves this with it.
   const lateDeadlineOf = (a) => deadlineDate(todayId, timedTargetOf(a), 30)
+  const timeStrOf = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
   // "Late Comer": self-report that the prayer happened, within 30 minutes
   // after the on-time target. Always counts as done, but for a smaller,
@@ -1337,14 +1338,16 @@ function FamilyApp({ user, onSignOut }) {
               // A parent can override any activity's default unlock time
               // (see the Parent tab's "Prayer unlock times" panel) — fall
               // back to the activity's built-in default when not set.
-              const unlockTime = unlockTimes[activity.id] ?? activity.visibleAfter
+              const isTimed = activity.control === 'timedPush'
+              // For a timed activity (Fajr) the "unlock time" concept is its
+              // on-time target, not a "show button after" time — both use
+              // the same parent override map, just a different fallback.
+              const unlockTime = isTimed ? timedTargetOf(activity) : (unlockTimes[activity.id] ?? activity.visibleAfter)
               const timeReached = hasReachedTime(now, todayId, unlockTime)
-              const pastDeadline =
-                activity.control === 'timedPush'
-                  ? now >= deadlineDate(todayId, timedTargetOf(activity), activity.graceMinutes || 0)
-                  : false
-              const pastLateDeadline =
-                activity.control === 'timedPush' && activity.lateLabel ? now >= lateDeadlineOf(activity) : false
+              const pastDeadline = isTimed
+                ? now >= deadlineDate(todayId, timedTargetOf(activity), activity.graceMinutes || 0)
+                : false
+              const pastLateDeadline = isTimed && activity.lateLabel ? now >= lateDeadlineOf(activity) : false
               return (
                 <ActivityCard
                   key={activity.id}
@@ -1358,6 +1361,8 @@ function FamilyApp({ user, onSignOut }) {
                   lateCredit={lateCreditOf(activity)}
                   pastDeadline={pastDeadline}
                   pastLateDeadline={pastLateDeadline}
+                  targetLabel={isTimed ? formatTimeLabel(timedTargetOf(activity)) : null}
+                  lateDeadlineLabel={isTimed && activity.lateLabel ? formatTimeLabel(timeStrOf(lateDeadlineOf(activity))) : null}
                   now={now}
                   onPressTimed={(e) => pressTimedButton(activity, e)}
                   onPressLate={(e) => pressLateButton(activity, e)}
@@ -1495,7 +1500,25 @@ function Bucket({ activity, coins, cash, bucketRef }) {
   )
 }
 
-function ActivityCard({ activity, entry, unlocked, locked, timeReached, unlockTime, reward, lateCredit, pastDeadline, pastLateDeadline, now, onPressTimed, onPressLate, onSimple, onUndo }) {
+function ActivityCard({
+  activity,
+  entry,
+  unlocked,
+  locked,
+  timeReached,
+  unlockTime,
+  reward,
+  lateCredit,
+  pastDeadline,
+  pastLateDeadline,
+  targetLabel,
+  lateDeadlineLabel,
+  now,
+  onPressTimed,
+  onPressLate,
+  onSimple,
+  onUndo,
+}) {
   const cur = useCurrency()
   const colors = CATEGORY_COLORS[activity.category] || CATEGORY_COLORS.discipline
   const timeGated = activity.control === 'simple' && entry.status === 'pending' && !timeReached
@@ -1542,6 +1565,8 @@ function ActivityCard({ activity, entry, unlocked, locked, timeReached, unlockTi
             pastDeadline={pastDeadline}
             pastLateDeadline={pastLateDeadline}
             lateCredit={lateCredit}
+            targetLabel={targetLabel}
+            lateDeadlineLabel={lateDeadlineLabel}
             now={now}
             onPress={onPressTimed}
             onPressLate={onPressLate}
@@ -1573,16 +1598,27 @@ function ActivityCard({ activity, entry, unlocked, locked, timeReached, unlockTi
   )
 }
 
-function TimedPushControl({ activity, entry, unlocked, pastDeadline, pastLateDeadline, lateCredit, now, onPress, onPressLate }) {
+function TimedPushControl({
+  activity,
+  entry,
+  unlocked,
+  pastDeadline,
+  pastLateDeadline,
+  lateCredit,
+  targetLabel,
+  lateDeadlineLabel,
+  now,
+  onPress,
+  onPressLate,
+}) {
   const cur = useCurrency()
-  const deadlineLabel =
-    activity.target + (activity.graceMinutes ? ` + ${activity.graceMinutes} min grace` : '')
+  const deadlineLabel = targetLabel + (activity.graceMinutes ? ` + ${activity.graceMinutes} min grace` : '')
   const pending = entry.status === 'pending'
   // Base lock: the activity is closed off (day locked, or already
-  // completed) regardless of time. Within that, the deadline decides
-  // which single button is open — "Push Now" before 6:00 AM, "Late
-  // Comer" from 6:00 AM up to its own lateDeadline (e.g. 7:00 AM), after
-  // which both buttons close for the day.
+  // completed) regardless of time. Within that, the on-time target (a
+  // parent can move it from the Activities tab) decides which single
+  // button is open — "Push Now" before the target, "Late Comer" for 30
+  // minutes after it, then both close for the day.
   const baseLocked = !unlocked || !pending
   const pushDisabled = baseLocked || pastDeadline
   const lateDisabled = baseLocked || !pastDeadline || pastLateDeadline
@@ -1604,7 +1640,7 @@ function TimedPushControl({ activity, entry, unlocked, pastDeadline, pastLateDea
         Deadline: {deadlineLabel}
         {activity.lateLabel
           ? ` · "${activity.lateLabel}" credits ${cur}${lateCredit}${
-              activity.lateDeadline ? ` until ${formatTimeLabel(activity.lateDeadline)}` : ''
+              lateDeadlineLabel ? ` until ${lateDeadlineLabel}` : ''
             }`
           : ''}
       </span>
