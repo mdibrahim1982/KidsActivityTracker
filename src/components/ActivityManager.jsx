@@ -304,7 +304,7 @@ export default function ActivityManager({
         </div>
 
         <button type="button" className="am-custom-toggle" onClick={() => setCustomOpen((v) => !v)}>
-          {customOpen ? '✕ Cancel' : `➕ Create a custom activity for ${kid.name}`}
+          {customOpen ? '✕ Cancel' : '➕ Create a custom activity'}
         </button>
 
         {customOpen && (
@@ -360,10 +360,12 @@ export default function ActivityManager({
             </label>
             {customError && <p className="login-error">{customError}</p>}
             <button type="submit" className="btn btn-done">
-              Add to {kid.name}'s list
+              Save custom activity
             </button>
             <p className="am-custom-note">
-              Saved for your whole family — you can add it to your other children too.
+              Saved for your whole family — it'll appear below under Recommended. Drag it into
+              the list on the left (or tap ＋) to add it to {kid.name}, and the same for any
+              other child.
             </p>
           </form>
         )}
