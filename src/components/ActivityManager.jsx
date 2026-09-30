@@ -137,10 +137,13 @@ export default function ActivityManager({
 
   // Show-button-after times are family-wide (prayer times are the same for
   // every child), so they live in the shared settings, not on one child.
+  // A "simple" activity falls back to its built-in visibleAfter (if any);
+  // a timed activity (Fajr) falls back to its built-in on-time target —
+  // either way, a parent's override in globalUnlockTimes wins.
   function unlockValue(a) {
     const shared = globalUnlockTimes?.[a.id]
     if (shared !== undefined && shared !== null) return shared
-    return a.visibleAfter || ''
+    return a.visibleAfter || a.target || ''
   }
 
   function renderSuggestion(a) {
