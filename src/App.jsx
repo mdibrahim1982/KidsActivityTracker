@@ -11,7 +11,6 @@ import {
   newChildId,
   createCustomActivity,
   resolveActivities,
-  getActivityById,
   rewardFor,
   todayKey,
   weekKey,
@@ -450,8 +449,12 @@ function FamilyApp({ user, onSignOut }) {
     })
   }
 
+  // Validated against the family's whole catalog (built-ins + custom), not
+  // just the static library — otherwise a custom activity's id always
+  // fails this check and silently never gets added (the bug that made
+  // both drag-and-drop and the + button do nothing for a custom activity).
   function addActivityToKid(activityId) {
-    if (!getActivityById(activityId)) return
+    if (!catalog.getById(activityId)) return
     updateActiveKid((kid) => {
       const ids = kid.activityIds?.length ? kid.activityIds : DEFAULT_ACTIVITY_IDS
       if (ids.includes(activityId)) return kid
