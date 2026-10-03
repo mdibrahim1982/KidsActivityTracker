@@ -6,6 +6,7 @@ import {
   DEFAULT_ACTIVITY_IDS,
   ALL_ACTIVITIES,
   CATEGORY_COLORS,
+  CATEGORY_TIPS,
   CHILD_COLORS,
   createChildRecord,
   newChildId,
@@ -21,8 +22,10 @@ import {
   blankDay,
   blankWeek,
   withAllActivities,
-  getCategoryTip,
 } from './data/activities.js'
+import { LanguageContext, useTranslation, loadLang, saveLang } from './LanguageContext.js'
+import { t as translate, tActivity, tCategory, tTip } from './i18n.js'
+import LanguageSwitcher from './components/LanguageSwitcher.jsx'
 import WeeksView from './components/WeeksView.jsx'
 import PasscodeModal from './components/PasscodeModal.jsx'
 import DayReviewModal from './components/DayReviewModal.jsx'
@@ -263,6 +266,14 @@ function importFromBackup(parsed, prev) {
 export default function App() {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [lang, setLang] = useState(loadLang)
+
+  useEffect(() => saveLang(lang), [lang])
+
+  const langValue = useMemo(
+    () => ({ lang, setLang, t: (key, vars) => translate(lang, key, vars) }),
+    [lang],
+  )
 
   useEffect(() => {
     if (IS_LOCAL_DEV) {
@@ -293,24 +304,29 @@ export default function App() {
     signOut(auth).catch((e) => console.error('Sign out failed', e))
   }
 
+  let body
   if (authLoading) {
-    return (
+    body = (
       <div className="login-gate">
         <div className="login-card">
+          <LanguageSwitcher lang={lang} setLang={setLang} className="lang-switcher-corner" />
           <span className="login-moon" aria-hidden="true">☾</span>
-          <h1>Kids Productivity Tracker</h1>
-          <p className="login-question">Loading…</p>
+          <h1>{translate(lang, 'appTitle')}</h1>
+          <p className="login-question">{translate(lang, 'loading')}</p>
         </div>
       </div>
     )
+  } else if (!user) {
+    body = <AuthGate />
+  } else {
+    body = <FamilyApp key={user.uid} user={user} onSignOut={() => handleSignOut(user.uid)} />
   }
 
-  if (!user) return <AuthGate />
-
-  return <FamilyApp key={user.uid} user={user} onSignOut={() => handleSignOut(user.uid)} />
+  return <LanguageContext.Provider value={langValue}>{body}</LanguageContext.Provider>
 }
 
 function FamilyApp({ user, onSignOut }) {
+  const { lang, setLang, t } = useTranslation()
   const uid = user.uid
   const [state, setState] = useState(() => loadState(uid))
   const [loggedInKid, setLoggedInKid] = useState(() => {
@@ -371,8 +387,8 @@ function FamilyApp({ user, onSignOut }) {
   )
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
   }, [])
 
   // Shows a "back to top" button once the page has been scrolled down a
@@ -604,23 +620,21 @@ function FamilyApp({ user, onSignOut }) {
     try {
       const legacySnap = await getDoc(doc(db, ...LEGACY_DOC_PATH))
       if (!legacySnap.exists()) {
-        window.alert('No older data was found to import.')
+        window.alert(t('noOlderData'))
         return
       }
       const legacy = legacySnap.data()
       if (!legacy?.kids || Object.keys(legacy.kids).length === 0) {
-        window.alert('No older data was found to import.')
+        window.alert(t('noOlderData'))
         return
       }
       const count = Object.keys(legacy.kids).length
-      if (!window.confirm(`Import ${count} child(ren) from the old shared data into this account?`)) return
+      if (!window.confirm(t('importLegacyConfirm', { count }))) return
       setState((prev) => importFromBackup(legacy, prev))
-      window.alert('Imported! Your children now appear here — you can edit their age and grade from the Parent tab.')
+      window.alert(t('importedLegacySuccess'))
     } catch (e) {
       console.error('Legacy import failed', e)
-      window.alert(
-        'Could not read the older data. It may not exist, or the security rules no longer allow it — try importing a backup file instead (Parent tab → Settings → Import).',
-      )
+      window.alert(t('legacyImportFailed'))
     }
   }
 
@@ -674,8 +688,8 @@ function FamilyApp({ user, onSignOut }) {
 
   function requestExport() {
     setPendingAction({
-      title: 'Parent passcode required',
-      message: 'Download a backup file of all your children\u2019s data.',
+      title: t('parentPasscodeRequired'),
+      message: t('msgExportBackup'),
       run: exportData,
     })
   }
@@ -688,12 +702,12 @@ function FamilyApp({ user, onSignOut }) {
         if (!parsed || typeof parsed !== 'object' || !parsed.kids) {
           throw new Error('Missing "kids" in file')
         }
-        if (!window.confirm('Replace the children and history in this account with the ones in that file?')) return
+        if (!window.confirm(t('importConfirm'))) return
         setState((prev) => importFromBackup(parsed, prev))
-        window.alert('Backup imported! Your account now shows that backup\u2019s data.')
+        window.alert(t('importSuccess'))
       } catch (e) {
         console.error('Import failed', e)
-        window.alert('Could not read that file \u2014 make sure it\u2019s a Kids Productivity Tracker backup .json file.')
+        window.alert(t('importFailed'))
       }
     }
     reader.readAsText(file)
@@ -701,8 +715,8 @@ function FamilyApp({ user, onSignOut }) {
 
   function requestImport() {
     setPendingAction({
-      title: 'Parent passcode required',
-      message: 'Replace your children\u2019s data with a backup file you pick next.',
+      title: t('parentPasscodeRequired'),
+      message: t('msgImportBackup'),
       run: () => importInputRef.current?.click(),
     })
   }
@@ -765,7 +779,7 @@ function FamilyApp({ user, onSignOut }) {
     })
     if (status === 'done' && originEl) {
       const activity = catalog.getById(activityId)
-      const tipText = activity && getCategoryTip(activity.category)
+      const tipText = activity && tTip(lang, activity.category, CATEGORY_TIPS[activity.category])
       if (tipText) {
         setTip({ text: tipText, key: `${activityId}-${Date.now()}` })
         setTimeout(() => {
@@ -872,8 +886,8 @@ function FamilyApp({ user, onSignOut }) {
   function requestDayReview() {
     if (day.locked) return
     setPendingAction({
-      title: 'Parent passcode required',
-      message: `Review ${activeKidInfo.name}'s coins for today before locking.`,
+      title: t('parentPasscodeRequired'),
+      message: t('msgReviewCoins', { name: activeKidInfo.name }),
       run: () => setReviewOpen(true),
     })
   }
@@ -959,8 +973,14 @@ function FamilyApp({ user, onSignOut }) {
     const payout = Math.max(0, week.cash - debtNow)
     const confirmMsg =
       debtNow > 0
-        ? `Empty all buckets for ${activeKidInfo.name}? ${currency}${Math.min(week.cash, debtNow).toFixed(2)} of this week's ${currency}${week.cash.toFixed(2)} goes toward carried-forward penalties, paying out ${currency}${payout.toFixed(2)}.`
-        : `Empty all buckets for ${activeKidInfo.name} after paying out this week's ${currency}${week.cash.toFixed(2)}?`
+        ? t('resetWeekConfirmWithDebt', {
+            name: activeKidInfo.name,
+            cur: currency,
+            min: Math.min(week.cash, debtNow).toFixed(2),
+            total: week.cash.toFixed(2),
+            payout: payout.toFixed(2),
+          })
+        : t('resetWeekConfirmNoDebt', { name: activeKidInfo.name, cur: currency, total: week.cash.toFixed(2) })
     if (!window.confirm(confirmMsg)) return
     setState((prev) => {
       const kid = ensureDebtField(prev.kids[activeKid])
@@ -1017,8 +1037,8 @@ function FamilyApp({ user, onSignOut }) {
 
   function requestAdminReset() {
     setPendingAction({
-      title: 'Admin passcode required',
-      message: `Reset today's activities for ${activeKidInfo.name} for testing (even though today may be locked)?`,
+      title: t('adminPasscodeRequired'),
+      message: t('msgResetToday', { name: activeKidInfo.name }),
       run: adminResetToday,
     })
   }
@@ -1043,8 +1063,8 @@ function FamilyApp({ user, onSignOut }) {
       return
     }
     setPendingAction({
-      title: 'Parent passcode required',
-      message: 'Open the parent area (progress, activities & settings).',
+      title: t('parentPasscodeRequired'),
+      message: t('msgOpenParentArea'),
       run: () => {
         setParentUnlocked(true)
         setView('parent')
@@ -1079,18 +1099,19 @@ function FamilyApp({ user, onSignOut }) {
     return (
       <div className="login-gate">
         <div className="login-card" style={{ maxWidth: 460 }}>
+          <LanguageSwitcher lang={lang} setLang={setLang} className="lang-switcher-corner" />
           <span className="login-moon" aria-hidden="true">☾</span>
-          <h1>Welcome!</h1>
-          <p className="login-question">Let's add your first child to get started.</p>
+          <h1>{t('welcomeExclaim')}</h1>
+          <p className="login-question">{t('addFirstChild')}</p>
           <ManageChildren kids={dynamicKids} onAdd={addChild} onEdit={editChild} onRemove={removeChild} onClose={() => {}} />
           {!IS_LOCAL_DEV && (
             <p className="auth-switch">
-              Used the old single-family version of this app before?{' '}
-              <button type="button" onClick={importLegacyData}>Import that data</button>
+              {t('usedOldVersion')}{' '}
+              <button type="button" onClick={importLegacyData}>{t('importThatData')}</button>
             </p>
           )}
           <p className="auth-switch">
-            <button type="button" onClick={handleParentLogout}>Sign out</button>
+            <button type="button" onClick={handleParentLogout}>{t('signOut')}</button>
           </p>
         </div>
       </div>
@@ -1121,21 +1142,22 @@ function FamilyApp({ user, onSignOut }) {
         <span className="hero-motif hero-motif-badminton" aria-hidden="true">🏸</span>
         <span className="hero-motif hero-motif-cricket" aria-hidden="true">🏏</span>
         <div className="hero-banner-text">
-          <p className="hero-kicker">🕌 Deen &nbsp;·&nbsp; 📚 Studies &nbsp;·&nbsp; 🌳 Play</p>
-          <h1>Kids Productivity Tracker</h1>
-          <p className="subtitle">Daily habits, prayers &amp; discipline tracker</p>
+          <p className="hero-kicker">{t('bannerKicker')}</p>
+          <h1>{t('appTitle')}</h1>
+          <p className="subtitle">{t('bannerSubtitle')}</p>
         </div>
+        <LanguageSwitcher lang={lang} setLang={setLang} className="lang-switcher-banner" />
       </header>
 
       <div className="view-tabs">
         <button className={`view-tab ${view === 'today' ? 'active' : ''}`} onClick={() => setView('today')}>
-          Today
+          {t('tabToday')}
         </button>
         <button className={`view-tab ${view === 'weeks' ? 'active' : ''}`} onClick={() => setView('weeks')}>
-          Weeks
+          {t('tabWeeks')}
         </button>
         <button className={`view-tab ${view === 'parent' ? 'active' : ''}`} onClick={requestParentView}>
-          👨‍👩‍👧 Parent
+          {t('tabParent')}
         </button>
       </div>
 
@@ -1155,18 +1177,18 @@ function FamilyApp({ user, onSignOut }) {
               </span>
             </button>
           ))}
-          <button type="button" className="logout-btn" onClick={handleLogout} title="Log out">
-            👋 {activeKidInfo.name}, not you?
+          <button type="button" className="logout-btn" onClick={handleLogout} title={t('logOutTitle')}>
+            {t('notYouLogout', { name: activeKidInfo.name })}
           </button>
         </nav>
         <DigitalClock time={now} />
       </div>
 
       <div className={`cloud-status cloud-status-${cloudStatus}`}>
-        {cloudStatus === 'synced' && '☁️ Synced — every device shares this data'}
-        {cloudStatus === 'connecting' && '🔄 Connecting to shared data…'}
-        {cloudStatus === 'offline' && '📴 Offline — changes are saved on this device only for now'}
-        {cloudStatus === 'local' && '💾 Synced to local storage (dev mode)'}
+        {cloudStatus === 'synced' && t('cloudSynced')}
+        {cloudStatus === 'connecting' && t('cloudConnecting')}
+        {cloudStatus === 'offline' && t('cloudOffline')}
+        {cloudStatus === 'local' && t('cloudLocal')}
       </div>
 
       {view === 'weeks' && (
@@ -1181,11 +1203,11 @@ function FamilyApp({ user, onSignOut }) {
 
       {view === 'parent' && (
         <>
-          <div className="parent-subnav" role="tablist" aria-label="Parent sections">
+          <div className="parent-subnav" role="tablist" aria-label={t('parentSectionsAria')}>
             {[
-              ['overview', '📊 Progress'],
-              ['activities', '🎯 Activities'],
-              ['settings', '⚙️ Settings'],
+              ['overview', t('parentSectionOverview')],
+              ['activities', t('parentSectionActivities')],
+              ['settings', t('parentSectionSettings')],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -1206,7 +1228,7 @@ function FamilyApp({ user, onSignOut }) {
                 setView('today')
               }}
             >
-              🔒 Lock
+              {t('lockShort')}
             </button>
           </div>
 
@@ -1217,8 +1239,7 @@ function FamilyApp({ user, onSignOut }) {
           {parentSection === 'activities' && (
             <>
               <p className="parent-panel-note" style={{ marginTop: 0 }}>
-                Pick a child with the tabs above, then build their list. Each child can have a
-                different set of activities and different rewards.
+                {t('activitiesTabNote')}
               </p>
               <ActivityManager
                 kid={activeKidInfo}
@@ -1286,29 +1307,29 @@ function FamilyApp({ user, onSignOut }) {
         <>
           <section className="summary-bar">
             <div className="summary-card">
-              <span className="summary-label">Today</span>
+              <span className="summary-label">{t('todayLabel')}</span>
               <span className="summary-value">
                 {currency} {todayCash.toFixed(2)} / {maxDaily.toFixed(0)}
               </span>
             </div>
             <div className="summary-card highlight">
-              <span className="summary-label">This week's buckets</span>
+              <span className="summary-label">{t('thisWeeksBuckets')}</span>
               <span className="summary-value">{currency} {week.cash.toFixed(2)}</span>
             </div>
             {debt > 0 && (
               <div className="summary-card debt-card">
-                <span className="summary-label">Carried penalty (owed)</span>
+                <span className="summary-label">{t('carriedPenalty')}</span>
                 <span className="summary-value">− {currency} {debt.toFixed(2)}</span>
               </div>
             )}
             <button className="pay-btn" onClick={resetWeek}>
-              💰 Pay &amp; empty buckets
+              {t('payAndEmpty')}
             </button>
           </section>
 
           {day.locked && (
             <div className="locked-banner">
-              🔒 Today is locked. Great work — come back tomorrow for a fresh day.
+              {t('todayLocked')}
             </div>
           )}
 
@@ -1328,10 +1349,8 @@ function FamilyApp({ user, onSignOut }) {
             <div className="verse-arabic" dir="rtl" lang="ar">
               إِنَّ ٱللَّهَ عَلِيمٌۢ بِمَا كُنتُمْ تَعْمَلُونَ
             </div>
-            <div className="verse-translation">
-              &ldquo;Surely Allah fully knows what you used to do.&rdquo;
-            </div>
-            <div className="verse-reference">Al Qur'aan (Surah An-Nahl, Verse 28)</div>
+            <div className="verse-translation">{t('verseTranslation')}</div>
+            <div className="verse-reference">{t('verseReference')}</div>
           </div>
 
           <div className="activity-list">
@@ -1374,7 +1393,7 @@ function FamilyApp({ user, onSignOut }) {
                   onUndo={
                     unlocked && entry.status === 'done' && !entry.reviewed
                       ? () => {
-                          if (window.confirm(`Undo "${activity.label}"? The coin will be taken back.`)) {
+                          if (window.confirm(t('undoConfirm', { label: tActivity(lang, activity, 'label') }))) {
                             undoActivity(activity.id)
                           }
                         }
@@ -1397,14 +1416,11 @@ function FamilyApp({ user, onSignOut }) {
           <div className="footer-actions">
             <button className="lock-btn" onClick={requestDayReview} disabled={day.locked}>
               <span className="lock-btn-icon">{day.locked ? '🔒' : '✅'}</span>
-              {day.locked ? 'Day locked' : 'Lock day & finish'}
+              {day.locked ? t('dayLocked') : t('lockDayFinish')}
             </button>
-            <p className="footer-note">
-              Each activity shows its own reward (a parent sets these). Locking the day marks any
-              still-pending activity as missed (empty bucket).
-            </p>
+            <p className="footer-note">{t('footerNote')}</p>
             <button className="admin-btn" onClick={requestAdminReset}>
-              🔧 Reset Today
+              {t('resetTodayBtn')}
             </button>
           </div>
         </>
@@ -1437,7 +1453,7 @@ function FamilyApp({ user, onSignOut }) {
         />
       )}
       {showScrollTop && (
-        <button type="button" className="scroll-top-btn" onClick={scrollToTop} aria-label="Scroll to top">
+        <button type="button" className="scroll-top-btn" onClick={scrollToTop} aria-label={t('scrollToTopAria')}>
           ⬆
         </button>
       )}
@@ -1490,6 +1506,7 @@ function FlyingCoin({ from, to, duration }) {
 
 function Bucket({ activity, coins, cash, bucketRef }) {
   const cur = useCurrency()
+  const { lang } = useTranslation()
   const colors = CATEGORY_COLORS[activity.category] || CATEGORY_COLORS.discipline
   const fillPct = Math.min(coins / 7, 1) * 100
   return (
@@ -1499,7 +1516,7 @@ function Bucket({ activity, coins, cash, bucketRef }) {
         <div className="bucket-fill" style={{ height: `${fillPct}%`, background: colors.dot }} />
         <span className="bucket-coins">🪙 {coins}</span>
       </div>
-      <div className="bucket-label">{activity.label}</div>
+      <div className="bucket-label">{tActivity(lang, activity, 'label')}</div>
       <div className="bucket-cash">{cur}{cash.toFixed(0)}</div>
     </div>
   )
@@ -1525,6 +1542,7 @@ function ActivityCard({
   onUndo,
 }) {
   const cur = useCurrency()
+  const { lang, t } = useTranslation()
   const colors = CATEGORY_COLORS[activity.category] || CATEGORY_COLORS.discipline
   const timeGated = activity.control === 'simple' && entry.status === 'pending' && !timeReached
   const finalOutcome = entry.status === 'done' || entry.status === 'rejected'
@@ -1549,15 +1567,15 @@ function ActivityCard({
         <span className="activity-icon" style={{ background: activity.tint || colors.tint, color: colors.dot }}>
           {activity.icon || colors.icon}
         </span>
-        <div className="activity-label">{activity.label}</div>
-        <span className="activity-reward" title="Reward for this activity">
+        <div className="activity-label">{tActivity(lang, activity, 'label')}</div>
+        <span className="activity-reward" title={t('rewardTitle')}>
           🪙 {cur}
           {Number(reward).toFixed(2).replace(/\.00$/, '')}
         </span>
       </div>
       {activity.hint && (
-        <div className="activity-hint" title={activity.hint}>
-          {activity.hint}
+        <div className="activity-hint" title={tActivity(lang, activity, 'hint')}>
+          {tActivity(lang, activity, 'hint')}
         </div>
       )}
 
@@ -1578,10 +1596,10 @@ function ActivityCard({
         )}
         {activity.control === 'simple' &&
           (timeGated ? (
-            <span className="time-gate-note">🔒 Unlocks at {formatTimeLabel(unlockTime)}</span>
+            <span className="time-gate-note">{t('unlocksAt', { time: formatTimeLabel(unlockTime) })}</span>
           ) : (
             <button className="btn btn-done" disabled={!unlocked || entry.status !== 'pending'} onClick={onSimple}>
-              {activity.buttonLabel || 'Completed on Time?'}
+              {activity.buttonLabel ? tActivity(lang, activity, 'buttonLabel') : t('completedOnTime')}
             </button>
           ))}
       </div>
@@ -1595,7 +1613,7 @@ function ActivityCard({
       />
       {onUndo && (
         <button type="button" className="undo-btn" onClick={onUndo}>
-          ↩️ Oops, undo
+          {t('oopsUndo')}
         </button>
       )}
     </div>
@@ -1615,7 +1633,8 @@ function TimedPushControl({
   onPressLate,
 }) {
   const cur = useCurrency()
-  const deadlineLabel = targetLabel + (activity.graceMinutes ? ` + ${activity.graceMinutes} min grace` : '')
+  const { lang, t } = useTranslation()
+  const deadlineLabel = targetLabel + (activity.graceMinutes ? t('graceSuffix', { min: activity.graceMinutes }) : '')
   const pending = entry.status === 'pending'
   // Base lock: the activity is closed off (day locked, or already
   // completed) regardless of time. Within that, the on-time target (a
@@ -1630,20 +1649,23 @@ function TimedPushControl({
     <div className="timed-push">
       <div className="timed-push-buttons">
         <button className="btn btn-done" disabled={pushDisabled} onClick={onPress}>
-          Push Now
+          {t('pushNow')}
         </button>
         {activity.lateLabel && (
           <button className="btn btn-late" disabled={lateDisabled} onClick={onPressLate}>
-            {activity.lateLabel}
+            {tActivity(lang, activity, 'lateLabel')}
           </button>
         )}
       </div>
       <span className="deadline-note">
-        Deadline: {deadlineLabel}
+        {t('deadlinePrefix', { label: deadlineLabel })}
         {activity.lateLabel
-          ? ` · "${activity.lateLabel}" credits ${cur}${lateCredit}${
-              lateDeadlineLabel ? ` until ${lateDeadlineLabel}` : ''
-            }`
+          ? t('lateCreditsSuffix', {
+              label: tActivity(lang, activity, 'lateLabel'),
+              cur,
+              amt: lateCredit,
+              until: lateDeadlineLabel ? t('untilSuffix', { time: lateDeadlineLabel }) : '',
+            })
           : ''}
       </span>
     </div>
@@ -1652,19 +1674,21 @@ function TimedPushControl({
 
 function StatusBadge({ state, time, reviewed, credit, unlockTime }) {
   const cur = useCurrency()
+  const { t } = useTranslation()
   const creditNote = credit ? ` · ${cur}${credit}` : ''
+  const timeNote = time ? ` · ${time.slice(0, 5)}` : ''
   const doneLabel =
     reviewed === 'approved'
-      ? `Coin approved${creditNote}${time ? ` · ${time.slice(0, 5)}` : ''}`
-      : `Coin earned${creditNote}${time ? ` · ${time.slice(0, 5)}` : ''} · pending parent review`
+      ? `${t('coinApproved')}${creditNote}${timeNote}`
+      : `${t('coinEarned')}${creditNote}${timeNote} · ${t('pendingParentReview')}`
   const map = {
     done: { label: doneLabel, className: reviewed === 'approved' ? 'badge-done' : 'badge-pending' },
-    rejected: { label: 'Coin rejected by parent', className: 'badge-missed' },
-    missed: { label: 'Missed', className: 'badge-missed' },
-    waiting: { label: 'Locked', className: 'badge-waiting' },
-    locked: { label: 'Day closed', className: 'badge-waiting' },
-    pending: { label: 'Ready', className: 'badge-pending' },
-    timegate: { label: `Not yet${unlockTime ? ` · from ${unlockTime}` : ''}`, className: 'badge-waiting' },
+    rejected: { label: t('coinRejected'), className: 'badge-missed' },
+    missed: { label: t('missedLabel'), className: 'badge-missed' },
+    waiting: { label: t('lockedLabel'), className: 'badge-waiting' },
+    locked: { label: t('dayClosed'), className: 'badge-waiting' },
+    pending: { label: t('readyLabel'), className: 'badge-pending' },
+    timegate: { label: `${t('notYet')}${unlockTime ? t('fromTime', { time: unlockTime }) : ''}`, className: 'badge-waiting' },
   }
   const info = map[state] || map.pending
   return <span className={`badge ${info.className}`}>{info.label}</span>
@@ -1689,6 +1713,7 @@ function SettingsPanel({
   onImport,
   onSignOut,
 }) {
+  const { t } = useTranslation()
   const [codeDraft, setCodeDraft] = useState('')
   const [codeMsg, setCodeMsg] = useState('')
   const choices = CURRENCY_CHOICES.includes(currency) ? CURRENCY_CHOICES : [currency, ...CURRENCY_CHOICES]
@@ -1698,36 +1723,33 @@ function SettingsPanel({
     e.preventDefault()
     const next = codeDraft.trim()
     if (next.length < 4) {
-      setCodeMsg('Please use at least 4 characters.')
+      setCodeMsg(t('codeTooShort'))
       return
     }
     onSetting('parentPasscode', next)
     setCodeDraft('')
-    setCodeMsg('Parent code updated.')
+    setCodeMsg(t('codeUpdated'))
   }
 
   return (
     <div className="settings-panel">
       <div className="parent-panel">
         <div className="parent-panel-head">
-          <h2 className="parent-panel-title">👨‍👩‍👧 Children</h2>
+          <h2 className="parent-panel-title">{t('childrenTitle')}</h2>
         </div>
-        <p className="parent-panel-note" style={{ marginTop: 0 }}>
-          Add a child, or change a child's name, age and grade. Age and grade decide which
-          suggested activities are recommended.
-        </p>
+        <p className="parent-panel-note" style={{ marginTop: 0 }}>{t('manageChildrenNote2')}</p>
         <button type="button" className="btn btn-done" onClick={onManageChildren}>
-          Manage children
+          {t('manageChildrenBtn')}
         </button>
       </div>
 
       <div className="parent-panel">
         <div className="parent-panel-head">
-          <h2 className="parent-panel-title">💰 Rewards</h2>
+          <h2 className="parent-panel-title">{t('rewardsTitle')}</h2>
         </div>
         <div className="settings-grid">
           <div className="settings-row">
-            <label htmlFor="set-currency">Currency</label>
+            <label htmlFor="set-currency">{t('currencyLabel')}</label>
             <select id="set-currency" value={currency} onChange={(e) => onSetting('currency', e.target.value)}>
               {choices.map((c) => (
                 <option key={c} value={c}>
@@ -1737,44 +1759,42 @@ function SettingsPanel({
             </select>
           </div>
           <div className="settings-row">
-            <label>Default reward per activity</label>
+            <label>{t('defaultRewardPerActivity')}</label>
             <span className="am-reward-wrap">
               <span className="am-cur">{currency}</span>
               <RewardInput value={rate} onCommit={(n) => onSetting('rewardRate', n)} />
             </span>
-            <small>Used for any activity you haven't given its own reward (Activities tab).</small>
+            <small>{t('defaultRewardHelp')}</small>
           </div>
           <div className="settings-row">
-            <label>Penalty for a rejected coin</label>
+            <label>{t('penaltyForRejected')}</label>
             <span className="am-reward-wrap">
               <span className="am-cur">{currency}</span>
               <RewardInput value={penalty} onCommit={(n) => onSetting('rejectPenalty', n)} />
             </span>
-            <small>Taken back when you reject a claimed coin at day-end; carries forward until paid off.</small>
+            <small>{t('penaltyHelp')}</small>
           </div>
         </div>
       </div>
 
       <div className="parent-panel">
         <div className="parent-panel-head">
-          <h2 className="parent-panel-title">🔐 Parent code</h2>
+          <h2 className="parent-panel-title">{t('parentCodeTitle')}</h2>
         </div>
         <p className="parent-panel-note" style={{ marginTop: 0 }}>
-          {parentCode
-            ? 'This code protects the day-end review, resets and this parent area from the children.'
-            : 'No parent code is set yet — choose one so the children can’t open the parent area.'}
+          {parentCode ? t('parentCodeHasOne') : t('parentCodeNone')}
         </p>
         <form className="settings-code-form" onSubmit={saveCode}>
           <input
             type="text"
-            placeholder="New parent code"
+            placeholder={t('newParentCode')}
             value={codeDraft}
             onChange={(e) => {
               setCodeDraft(e.target.value)
               setCodeMsg('')
             }}
           />
-          <button type="submit" className="btn btn-done">Save code</button>
+          <button type="submit" className="btn btn-done">{t('saveCodeBtn')}</button>
         </form>
         {codeMsg && <p className="parent-panel-note">{codeMsg}</p>}
       </div>
@@ -1782,48 +1802,43 @@ function SettingsPanel({
       <div className={`sync-note ${cloudStatus === 'synced' ? 'sync-note-ok' : ''} ${cloudStatus === 'local' ? 'sync-note-local' : ''}`}>
         {cloudStatus === 'synced' && (
           <p>
-            <strong>☁️ Live sync is on.</strong> Every device signed in to {userEmail || 'this account'} shares
-            the same children and history. Backups below are an extra safety copy.
+            <strong>{t('liveSyncOn')}</strong> {t('liveSyncExplain', { email: userEmail || t('thisAccountWord') })}
           </p>
         )}
         {cloudStatus === 'local' && (
           <p>
-            <strong>💾 Local dev mode.</strong> Running on localhost, so nothing here touches the cloud or
-            needs a real account — data stays in this browser only.
+            <strong>{t('localDevModeTitle')}</strong> {t('localDevExplain')}
           </p>
         )}
         {(cloudStatus === 'offline' || cloudStatus === 'connecting') && (
           <p>
-            <strong>⚠️ Not connected right now.</strong> Changes are saved on this device and will sync
-            when it reconnects. Use a backup to move data by hand in the meantime.
+            <strong>{t('notConnectedTitle')}</strong> {t('notConnectedExplain')}
           </p>
         )}
         {!isLocalDev && sizeKB > 0 && (
           <p className={sizeKB > 700 ? 'settings-size-warn' : ''}>
-            Cloud storage used: about {sizeKB} KB of roughly {LIMIT_KB} KB for one account.
-            {sizeKB > 700 && ' Getting full — download a backup now.'}
+            {t('cloudStorageUsed', { used: sizeKB, limit: LIMIT_KB })}
+            {sizeKB > 700 && t('gettingFull')}
           </p>
         )}
         <div className="sync-actions">
           <button type="button" className="btn btn-done" onClick={onExport}>
-            ⬇️ Download backup
+            {t('downloadBackupBtn')}
           </button>
           <button type="button" className="btn btn-late" onClick={onImport}>
-            ⬆️ Restore from backup
+            {t('restoreBackupBtn')}
           </button>
         </div>
-        <p className="sync-hint">
-          A backup file also imports data from the original single-family version of this app.
-        </p>
+        <p className="sync-hint">{t('backupHint')}</p>
       </div>
 
       <div className="parent-panel">
         <div className="parent-panel-head">
-          <h2 className="parent-panel-title">👤 Account</h2>
+          <h2 className="parent-panel-title">{t('accountTitle')}</h2>
         </div>
-        {userEmail && <p className="parent-panel-note" style={{ marginTop: 0 }}>Signed in as {userEmail}</p>}
+        {userEmail && <p className="parent-panel-note" style={{ marginTop: 0 }}>{t('signedInAs', { email: userEmail })}</p>}
         <button type="button" className="btn btn-missed" onClick={onSignOut}>
-          🚪 Sign out of this device
+          {t('signOutDeviceBtn')}
         </button>
       </div>
     </div>
