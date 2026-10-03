@@ -1,9 +1,12 @@
 import React, { useState } from 'react'
+import { useTranslation } from '../LanguageContext.js'
+import LanguageSwitcher from './LanguageSwitcher.jsx'
 
 // A light, fun "who's there?" gate — not real security (the password is
 // just the kid's own name), just a nice ritual before the app opens, and a
 // simple way to remember whose buttons are getting tapped this session.
 export default function LoginGate({ kids, onLogin }) {
+  const { lang, setLang, t } = useTranslation()
   const [picked, setPicked] = useState(null)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -13,7 +16,7 @@ export default function LoginGate({ kids, onLogin }) {
     e.preventDefault()
     if (!picked) return
     if (password.trim().toLowerCase() !== picked.name.trim().toLowerCase()) {
-      setError("Hmm, that's not quite right. Try again!")
+      setError(t('wrongPassword'))
       setPassword('')
       return
     }
@@ -27,8 +30,8 @@ export default function LoginGate({ kids, onLogin }) {
       <div className="login-gate">
         <div className="login-card login-welcome">
           <span className="login-welcome-icon" aria-hidden="true">🌟</span>
-          <h1>Welcome, {welcome.name}!</h1>
-          <p>Let's make today a great one — Deen, studies, and play.</p>
+          <h1>{t('welcomeNameExclaim', { name: welcome.name })}</h1>
+          <p>{t('welcomeMessage')}</p>
         </div>
       </div>
     )
@@ -37,9 +40,10 @@ export default function LoginGate({ kids, onLogin }) {
   return (
     <div className="login-gate">
       <div className="login-card">
+        <LanguageSwitcher lang={lang} setLang={setLang} className="lang-switcher-corner" />
         <span className="login-moon" aria-hidden="true">☾</span>
-        <h1>Assalaamu Alaikum!</h1>
-        <p className="login-question">Hey, Who're You?</p>
+        <h1>{t('assalamu')}</h1>
+        <p className="login-question">{t('whoAreYou')}</p>
 
         <div className="login-kid-picker">
           {kids.map((k) => (
@@ -62,18 +66,18 @@ export default function LoginGate({ kids, onLogin }) {
 
         {picked && (
           <form className="login-form" onSubmit={submit}>
-            <label htmlFor="login-password">Password (hint: it's your name!)</label>
+            <label htmlFor="login-password">{t('passwordHint')}</label>
             <input
               id="login-password"
               type="password"
               autoFocus
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={`Enter ${picked.name}'s password`}
+              placeholder={t('enterPasswordFor', { name: picked.name })}
             />
             {error && <p className="login-error">{error}</p>}
             <button type="submit" className="btn btn-done login-submit">
-              Log In
+              {t('logIn')}
             </button>
           </form>
         )}

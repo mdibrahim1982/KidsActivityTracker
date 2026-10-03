@@ -7,21 +7,26 @@ import {
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase.js'
 import { DEFAULT_REWARD, DEFAULT_CURRENCY, DEFAULT_REJECT_PENALTY } from '../data/activities.js'
+import { useTranslation } from '../LanguageContext.js'
+import LanguageSwitcher from './LanguageSwitcher.jsx'
 
 const CURRENCY_CHOICES = ['₹', '$', '£', '€', 'AED', 'SAR', 'PKR', 'BDT', 'MYR', 'CAD', 'AUD']
 
-const ERROR_MESSAGES = {
-  'auth/email-already-in-use': 'An account already exists for that email — try logging in instead.',
-  'auth/invalid-email': "That doesn't look like a valid email address.",
-  'auth/weak-password': 'Password should be at least 6 characters.',
-  'auth/user-not-found': 'No account found for that email — sign up instead?',
-  'auth/wrong-password': 'Incorrect password. Try again, or reset it below.',
-  'auth/invalid-credential': "Email or password doesn't match our records.",
-  'auth/too-many-requests': 'Too many attempts — please wait a bit and try again.',
+// Firebase error code -> translation key (see src/i18n.js for the actual text).
+const ERROR_KEYS = {
+  'auth/email-already-in-use': 'authErrEmailInUse',
+  'auth/invalid-email': 'authErrInvalidEmail',
+  'auth/weak-password': 'authErrWeakPassword',
+  'auth/user-not-found': 'authErrUserNotFound',
+  'auth/wrong-password': 'authErrWrongPassword',
+  'auth/invalid-credential': 'authErrInvalidCredential',
+  'auth/too-many-requests': 'authErrTooManyRequests',
 }
 
-function friendlyError(err) {
-  return ERROR_MESSAGES[err?.code] || err?.message || 'Something went wrong. Please try again.'
+function friendlyError(err, t) {
+  const key = ERROR_KEYS[err?.code]
+  if (key) return t(key)
+  return err?.message || t('authErrGeneric')
 }
 
 // A real Firebase account per parent/family — this is what makes the app
@@ -29,6 +34,7 @@ function friendlyError(err) {
 // activities, coins) is private to their own account, isolated from every
 // other family's, via Firestore security rules keyed on this login.
 export default function AuthGate() {
+  const { lang, setLang, t } = useTranslation()
   const [mode, setMode] = useState('login') // 'login' | 'signup' | 'reset'
   const [parentName, setParentName] = useState('')
   const [email, setEmail] = useState('')
@@ -48,7 +54,7 @@ export default function AuthGate() {
       await signInWithEmailAndPassword(auth, email.trim(), password)
       // App.jsx picks up the signed-in user via onAuthStateChanged.
     } catch (err) {
-      setError(friendlyError(err))
+      setError(friendlyError(err, t))
     } finally {
       setBusy(false)
     }
@@ -57,10 +63,10 @@ export default function AuthGate() {
   async function handleSignup(e) {
     e.preventDefault()
     setError('')
-    if (!parentName.trim()) return setError('Please enter your name.')
-    if (parentPasscode.trim().length < 4) return setError('Please choose a parent code at least 4 characters long.')
-    if (password.length < 6) return setError('Password should be at least 6 characters.')
-    if (password !== confirmPassword) return setError("Passwords don't match.")
+    if (!parentName.trim()) return setError(t('authErrEnterName'))
+    if (parentPasscode.trim().length < 4) return setError(t('authErrParentCodeShort'))
+    if (password.length < 6) return setError(t('authErrPasswordShort'))
+    if (password !== confirmPassword) return setError(t('authErrPasswordMismatch'))
 
     setBusy(true)
     try {
@@ -87,7 +93,7 @@ export default function AuthGate() {
         { merge: true },
       )
     } catch (err) {
-      setError(friendlyError(err))
+      setError(friendlyError(err, t))
     } finally {
       setBusy(false)
     }
@@ -97,13 +103,13 @@ export default function AuthGate() {
     e.preventDefault()
     setError('')
     setInfo('')
-    if (!email.trim()) return setError('Enter the email on your account first.')
+    if (!email.trim()) return setError(t('authErrEnterEmailFirst'))
     setBusy(true)
     try {
       await sendPasswordResetEmail(auth, email.trim())
-      setInfo('Password reset email sent — check your inbox.')
+      setInfo(t('authResetSent'))
     } catch (err) {
-      setError(friendlyError(err))
+      setError(friendlyError(err, t))
     } finally {
       setBusy(false)
     }
@@ -118,17 +124,18 @@ export default function AuthGate() {
   return (
     <div className="login-gate">
       <div className="login-card auth-card">
+        <LanguageSwitcher lang={lang} setLang={setLang} className="lang-switcher-corner" />
         <span className="login-moon" aria-hidden="true">☾</span>
-        <h1>Kids Productivity Tracker</h1>
+        <h1>{t('appTitle')}</h1>
         <p className="login-question">
-          {mode === 'signup' ? 'Create your family account' : mode === 'reset' ? 'Reset your password' : 'Welcome back'}
+          {mode === 'signup' ? t('authCreateAccount') : mode === 'reset' ? t('authResetPassword') : t('authWelcomeBack')}
         </p>
 
         {mode === 'login' && (
           <form className="login-form" onSubmit={handleLogin}>
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">{t('emailLabel')}</label>
             <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{t('passwordLabel')}</label>
             <input
               id="password"
               type="password"
@@ -138,25 +145,25 @@ export default function AuthGate() {
             />
             {error && <p className="login-error">{error}</p>}
             <button type="submit" className="btn btn-done login-submit" disabled={busy}>
-              {busy ? 'Logging in…' : 'Log In'}
+              {busy ? t('loggingIn') : t('logIn')}
             </button>
             <p className="auth-switch">
-              <button type="button" onClick={() => switchMode('reset')}>Forgot password?</button>
+              <button type="button" onClick={() => switchMode('reset')}>{t('forgotPassword')}</button>
             </p>
             <p className="auth-switch">
-              New here?{' '}
-              <button type="button" onClick={() => switchMode('signup')}>Create a family account</button>
+              {t('newHere')}{' '}
+              <button type="button" onClick={() => switchMode('signup')}>{t('createFamilyAccount')}</button>
             </p>
           </form>
         )}
 
         {mode === 'signup' && (
           <form className="login-form" onSubmit={handleSignup}>
-            <label htmlFor="parentName">Your name</label>
+            <label htmlFor="parentName">{t('yourName')}</label>
             <input id="parentName" type="text" required value={parentName} onChange={(e) => setParentName(e.target.value)} />
-            <label htmlFor="signupEmail">Email</label>
+            <label htmlFor="signupEmail">{t('emailLabel')}</label>
             <input id="signupEmail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            <label htmlFor="signupPassword">Password</label>
+            <label htmlFor="signupPassword">{t('passwordLabel')}</label>
             <input
               id="signupPassword"
               type="password"
@@ -164,7 +171,7 @@ export default function AuthGate() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <label htmlFor="confirmPassword">Confirm password</label>
+            <label htmlFor="confirmPassword">{t('confirmPassword')}</label>
             <input
               id="confirmPassword"
               type="password"
@@ -172,16 +179,16 @@ export default function AuthGate() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
-            <label htmlFor="parentPasscode">Parent code (for day-review &amp; settings — kids won't see this)</label>
+            <label htmlFor="parentPasscode">{t('parentCodeLabel')}</label>
             <input
               id="parentPasscode"
               type="text"
               required
               value={parentPasscode}
               onChange={(e) => setParentPasscode(e.target.value)}
-              placeholder="e.g. a 4+ digit code"
+              placeholder={t('parentCodePlaceholder')}
             />
-            <label htmlFor="currency">Currency for rewards</label>
+            <label htmlFor="currency">{t('currencyForRewards')}</label>
             <select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {CURRENCY_CHOICES.map((c) => (
                 <option key={c} value={c}>
@@ -191,25 +198,25 @@ export default function AuthGate() {
             </select>
             {error && <p className="login-error">{error}</p>}
             <button type="submit" className="btn btn-done login-submit" disabled={busy}>
-              {busy ? 'Creating account…' : 'Create Account'}
+              {busy ? t('creatingAccount') : t('createAccount')}
             </button>
             <p className="auth-switch">
-              Already have an account? <button type="button" onClick={() => switchMode('login')}>Log in</button>
+              {t('alreadyHaveAccount')} <button type="button" onClick={() => switchMode('login')}>{t('logIn')}</button>
             </p>
           </form>
         )}
 
         {mode === 'reset' && (
           <form className="login-form" onSubmit={handleReset}>
-            <label htmlFor="resetEmail">Email</label>
+            <label htmlFor="resetEmail">{t('emailLabel')}</label>
             <input id="resetEmail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
             {error && <p className="login-error">{error}</p>}
             {info && <p className="auth-info">{info}</p>}
             <button type="submit" className="btn btn-done login-submit" disabled={busy}>
-              {busy ? 'Sending…' : 'Send Reset Email'}
+              {busy ? t('sendingReset') : t('sendResetEmail')}
             </button>
             <p className="auth-switch">
-              <button type="button" onClick={() => switchMode('login')}>Back to log in</button>
+              <button type="button" onClick={() => switchMode('login')}>{t('backToLogin')}</button>
             </p>
           </form>
         )}

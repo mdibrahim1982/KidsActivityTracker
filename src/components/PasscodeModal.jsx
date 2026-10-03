@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
+import { useTranslation } from '../LanguageContext.js'
 
 export default function PasscodeModal({ title, message, onConfirm, onCancel }) {
+  const { t } = useTranslation()
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
 
@@ -8,7 +10,7 @@ export default function PasscodeModal({ title, message, onConfirm, onCancel }) {
     e.preventDefault()
     const ok = onConfirm(code)
     if (!ok) {
-      setError('Incorrect passcode. Try again.')
+      setError(t('incorrectPasscode'))
       setCode('')
     }
   }
@@ -21,7 +23,7 @@ export default function PasscodeModal({ title, message, onConfirm, onCancel }) {
         <input
           type="password"
           autoFocus
-          placeholder="Enter passcode"
+          placeholder={t('enterPasscode')}
           value={code}
           onChange={(e) => {
             setCode(e.target.value)
@@ -31,10 +33,10 @@ export default function PasscodeModal({ title, message, onConfirm, onCancel }) {
         {error && <p className="modal-error">{error}</p>}
         <div className="modal-actions">
           <button type="button" className="ghost-btn" onClick={onCancel}>
-            Cancel
+            {t('cancel')}
           </button>
           <button type="submit" className="btn btn-done">
-            Confirm
+            {t('confirm')}
           </button>
         </div>
       </form>

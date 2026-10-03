@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useCurrency } from '../CurrencyContext.js'
+import { useTranslation } from '../LanguageContext.js'
+import { tActivity } from '../i18n.js'
 import {
-  shortLabel,
   weeksInMonth,
   formatMonthLabel,
   addMonths,
@@ -10,6 +11,7 @@ import {
 
 export default function WeeksView({ days, activities, rate, viewMonth, onMonthChange }) {
   const cur = useCurrency()
+  const { lang, t } = useTranslation()
   const weeks = weeksInMonth(viewMonth)
   const [selectedWeek, setSelectedWeek] = useState(weeks[0]?.weekNum || 1)
   const todayId = todayKey()
@@ -51,7 +53,7 @@ export default function WeeksView({ days, activities, rate, viewMonth, onMonthCh
             className={`week-tab ${w.weekNum === selectedWeek ? 'active' : ''}`}
             onClick={() => setSelectedWeek(w.weekNum)}
           >
-            Week {w.weekNum}
+            {t('weekN', { n: w.weekNum })}
             <small>
               {w.startDay}–{w.endDay}
             </small>
@@ -64,13 +66,15 @@ export default function WeeksView({ days, activities, rate, viewMonth, onMonthCh
           <table className="week-table">
             <thead>
               <tr>
-                <th>Date</th>
+                <th>{t('dateLabel')}</th>
                 {activities.map((a) => (
-                  <th key={a.id} title={a.label}>
-                    {shortLabel(a)}
+                  <th key={a.id} title={tActivity(lang, a, 'label')}>
+                    {tActivity(lang, a, 'label').length > 10
+                      ? tActivity(lang, a, 'label').split(' ')[0]
+                      : tActivity(lang, a, 'label')}
                   </th>
                 ))}
-                <th>Total</th>
+                <th>{t('totalLabel')}</th>
               </tr>
             </thead>
             <tbody>
@@ -92,8 +96,9 @@ export default function WeeksView({ days, activities, rate, viewMonth, onMonthCh
                       else if (status === 'missed') icon = '❌'
                       else if (status === 'rejected') icon = '🚫'
                       else if (isFuture) icon = '·'
+                      const statusWord = status || (isFuture ? t('notYet') : t('noDataWord'))
                       return (
-                        <td key={a.id} className="status-cell" title={`${a.label}: ${status || (isFuture ? 'not yet' : 'no data')}`}>
+                        <td key={a.id} className="status-cell" title={`${tActivity(lang, a, 'label')}: ${statusWord}`}>
                           {icon}
                         </td>
                       )
@@ -105,7 +110,7 @@ export default function WeeksView({ days, activities, rate, viewMonth, onMonthCh
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={activities.length + 1}>Week {selectedWeek} total</td>
+                <td colSpan={activities.length + 1}>{t('weekNTotal', { n: selectedWeek })}</td>
                 <td className="total-cell">{cur}{weekTotal.toFixed(0)}</td>
               </tr>
             </tfoot>

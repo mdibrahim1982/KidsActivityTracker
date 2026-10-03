@@ -1,6 +1,8 @@
 import React from 'react'
 import { CATEGORY_COLORS, resolveActivities } from '../data/activities.js'
 import { useCurrency } from '../CurrencyContext.js'
+import { useTranslation } from '../LanguageContext.js'
+import { tActivity } from '../i18n.js'
 
 // A parent-passcode-gated, at-a-glance view of BOTH kids' current week —
 // coins and cash per activity, side by side. The existing "Weeks" tab
@@ -8,13 +10,14 @@ import { useCurrency } from '../CurrencyContext.js'
 // quick weekly comparison a parent wants without digging through days.
 export default function ParentWeeklyPanel({ kids, kidsState, weekId, onLock }) {
   const cur = useCurrency()
+  const { lang, t } = useTranslation()
   return (
     <div className="parent-panel">
       <div className="parent-panel-head">
-        <h2 className="parent-panel-title">📊 This week — all children</h2>
+        <h2 className="parent-panel-title">{t('thisWeekAllChildren')}</h2>
         {onLock && (
           <button type="button" className="parent-lock-btn" onClick={onLock}>
-            🔒 Lock parent view
+            {t('lockParentView')}
           </button>
         )}
       </div>
@@ -38,16 +41,16 @@ export default function ParentWeeklyPanel({ kids, kidsState, weekId, onLock }) {
 
               <div className="parent-kid-totals">
                 <div className="ptot">
-                  <span className="ptot-label">This week</span>
+                  <span className="ptot-label">{t('thisWeekLabel')}</span>
                   <span className="ptot-value">{cur}{week.cash.toFixed(2)}</span>
                 </div>
                 <div className="ptot">
-                  <span className="ptot-label">Coins</span>
+                  <span className="ptot-label">{t('coinsLabel')}</span>
                   <span className="ptot-value">🪙 {totalCoins}</span>
                 </div>
                 {debt > 0 && (
                   <div className="ptot">
-                    <span className="ptot-label">Owed</span>
+                    <span className="ptot-label">{t('owedLabel')}</span>
                     <span className="ptot-value ptot-debt">− {cur}{debt.toFixed(2)}</span>
                   </div>
                 )}
@@ -66,7 +69,7 @@ export default function ParentWeeklyPanel({ kids, kidsState, weekId, onLock }) {
                       >
                         {a.icon || colors.icon}
                       </span>
-                      <span className="parent-activity-name">{a.label}</span>
+                      <span className="parent-activity-name">{tActivity(lang, a, 'label')}</span>
                       <span className="parent-activity-coins">🪙 {coins}</span>
                       <span className="parent-activity-cash">{cur}{cash.toFixed(0)}</span>
                     </div>
@@ -78,10 +81,7 @@ export default function ParentWeeklyPanel({ kids, kidsState, weekId, onLock }) {
         })}
       </div>
 
-      <p className="parent-panel-note">
-        This resets whenever "Pay &amp; empty buckets" is used for a kid. For full day-by-day
-        history, use the Weeks tab.
-      </p>
+      <p className="parent-panel-note">{t('parentPanelResetNote')}</p>
     </div>
   )
 }

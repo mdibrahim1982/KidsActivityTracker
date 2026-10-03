@@ -1,5 +1,7 @@
 import React from 'react'
 import { useCurrency } from '../CurrencyContext.js'
+import { useTranslation } from '../LanguageContext.js'
+import { tActivity } from '../i18n.js'
 
 // Shown after the parent passcode, right before a day locks. Every activity
 // the kid marked "done" today is listed here so the parent can Approve it
@@ -8,6 +10,7 @@ import { useCurrency } from '../CurrencyContext.js'
 // or Obeyed, which nobody but the kid witnessed in the moment.
 export default function DayReviewModal({ kidName, day, activities, rate, penalty, onApprove, onReject, onFinish, onCancel }) {
   const cur = useCurrency()
+  const { lang, t } = useTranslation()
   const claimed = activities.filter((a) => day.activities[a.id]?.status === 'done')
   const reviewedCount = claimed.filter((a) => day.activities[a.id]?.reviewed).length
   const allReviewed = claimed.length === 0 || reviewedCount === claimed.length
@@ -15,11 +18,11 @@ export default function DayReviewModal({ kidName, day, activities, rate, penalty
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-card review-card">
-        <h3>Review {kidName}'s coins</h3>
+        <h3>{t('reviewCoinsTitle', { name: kidName })}</h3>
         <p className="modal-message">
           {claimed.length === 0
-            ? 'No coins were claimed today — nothing to review.'
-            : `Approve or reject each coin claimed today. A rejected coin is removed from the bucket and adds a ${cur}${Number(penalty ?? 0).toFixed(2)} penalty that carries forward.`}
+            ? t('noCoinsClaimed')
+            : t('reviewExplain', { cur, amount: Number(penalty ?? 0).toFixed(2) })}
         </p>
 
         <div className="review-list">
@@ -29,22 +32,22 @@ export default function DayReviewModal({ kidName, day, activities, rate, penalty
             return (
               <div key={a.id} className={`review-row ${reviewed ? `review-row-${reviewed}` : ''}`}>
                 <div className="review-row-info">
-                  <span className="review-row-label">{a.label}</span>
+                  <span className="review-row-label">{tActivity(lang, a, 'label')}</span>
                   <span className="review-row-time">
-                    {entry.time ? entry.time.slice(0, 5) : 'Marked done'} · {cur}{(entry.credit ?? rate).toFixed(2)}
+                    {entry.time ? entry.time.slice(0, 5) : t('markedDone')} · {cur}{(entry.credit ?? rate).toFixed(2)}
                   </span>
                 </div>
                 {reviewed ? (
                   <span className={`review-verdict verdict-${reviewed}`}>
-                    {reviewed === 'approved' ? '✅ Approved' : '❌ Rejected'}
+                    {reviewed === 'approved' ? t('approvedBadge') : t('rejectedBadge')}
                   </span>
                 ) : (
                   <div className="review-actions">
                     <button className="btn btn-done" onClick={() => onApprove(a.id)}>
-                      Approve
+                      {t('approveBtn')}
                     </button>
                     <button className="btn btn-missed" onClick={() => onReject(a.id)}>
-                      Reject
+                      {t('rejectBtn')}
                     </button>
                   </div>
                 )}
@@ -54,17 +57,15 @@ export default function DayReviewModal({ kidName, day, activities, rate, penalty
         </div>
 
         <p className="review-hint">
-          {claimed.length > 0 && !allReviewed
-            ? 'Anything left unreviewed stays approved and keeps its coin.'
-            : null}
+          {claimed.length > 0 && !allReviewed ? t('unreviewedNote') : null}
         </p>
 
         <div className="modal-actions">
           <button type="button" className="ghost-btn" onClick={onCancel}>
-            Review later
+            {t('reviewLater')}
           </button>
           <button type="button" className="btn btn-done" onClick={onFinish}>
-            Finish &amp; lock day
+            {t('finishLockDay')}
           </button>
         </div>
       </div>

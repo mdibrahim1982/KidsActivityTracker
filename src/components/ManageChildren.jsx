@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
+import { useTranslation } from '../LanguageContext.js'
 
 // Minimal fields on purpose (name, age, grade) — this is meant to be quick
 // for a parent to fill in, not a full profile form.
 export default function ManageChildren({ kids, onAdd, onEdit, onRemove, onClose }) {
+  const { t } = useTranslation()
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ name: '', age: '', grade: '' })
   const [adding, setAdding] = useState(false)
@@ -39,22 +41,22 @@ export default function ManageChildren({ kids, onAdd, onEdit, onRemove, onClose 
   return (
     <div className="parent-panel">
       <div className="parent-panel-head">
-        <h2 className="parent-panel-title">👨‍👩‍👧 Manage children</h2>
+        <h2 className="parent-panel-title">{t('manageChildrenTitle')}</h2>
         <button type="button" className="parent-lock-btn" onClick={onClose}>
-          Done
+          {t('done')}
         </button>
       </div>
 
       <div className="manage-children-list">
         {kids.length === 0 && (
-          <p className="empty-note">No children yet — add your first one below to get started.</p>
+          <p className="empty-note">{t('noChildrenYet')}</p>
         )}
         {kids.map((k) =>
           editingId === k.id ? (
             <form key={k.id} className="child-form" onSubmit={submit}>
               <input
                 type="text"
-                placeholder="Name"
+                placeholder={t('namePlaceholder')}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -63,19 +65,19 @@ export default function ManageChildren({ kids, onAdd, onEdit, onRemove, onClose 
                 type="number"
                 min="1"
                 max="25"
-                placeholder="Age"
+                placeholder={t('agePlaceholder')}
                 value={form.age}
                 onChange={(e) => setForm({ ...form, age: e.target.value })}
               />
               <input
                 type="text"
-                placeholder="Grade (e.g. 5th Grade)"
+                placeholder={t('gradePlaceholder')}
                 value={form.grade}
                 onChange={(e) => setForm({ ...form, grade: e.target.value })}
               />
               <div className="child-form-actions">
-                <button type="submit" className="btn btn-done">Save</button>
-                <button type="button" className="btn" onClick={cancel}>Cancel</button>
+                <button type="submit" className="btn btn-done">{t('save')}</button>
+                <button type="button" className="btn" onClick={cancel}>{t('cancel')}</button>
               </div>
             </form>
           ) : (
@@ -84,22 +86,22 @@ export default function ManageChildren({ kids, onAdd, onEdit, onRemove, onClose 
               <div className="child-row-info">
                 <strong>{k.name}</strong>
                 <small>
-                  {k.grade || 'No grade set'}
-                  {k.age ? ` · Age ${k.age}` : ''}
+                  {k.grade || t('noGradeSet')}
+                  {k.age ? t('ageSuffix', { age: k.age }) : ''}
                 </small>
               </div>
               <div className="child-row-actions">
-                <button type="button" className="btn" onClick={() => startEdit(k)}>Edit</button>
+                <button type="button" className="btn" onClick={() => startEdit(k)}>{t('edit')}</button>
                 <button
                   type="button"
                   className="btn btn-missed"
                   onClick={() => {
-                    if (window.confirm(`Remove ${k.name}? This deletes all of their saved history too.`)) {
+                    if (window.confirm(t('removeChildConfirm', { name: k.name }))) {
                       onRemove(k.id)
                     }
                   }}
                 >
-                  Remove
+                  {t('remove')}
                 </button>
               </div>
             </div>
@@ -111,7 +113,7 @@ export default function ManageChildren({ kids, onAdd, onEdit, onRemove, onClose 
         <form className="child-form" onSubmit={submit}>
           <input
             type="text"
-            placeholder="Name"
+            placeholder={t('namePlaceholder')}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
@@ -121,31 +123,28 @@ export default function ManageChildren({ kids, onAdd, onEdit, onRemove, onClose 
             type="number"
             min="1"
             max="25"
-            placeholder="Age"
+            placeholder={t('agePlaceholder')}
             value={form.age}
             onChange={(e) => setForm({ ...form, age: e.target.value })}
           />
           <input
             type="text"
-            placeholder="Grade (e.g. 5th Grade)"
+            placeholder={t('gradePlaceholder')}
             value={form.grade}
             onChange={(e) => setForm({ ...form, grade: e.target.value })}
           />
           <div className="child-form-actions">
-            <button type="submit" className="btn btn-done">Add child</button>
-            <button type="button" className="btn" onClick={cancel}>Cancel</button>
+            <button type="submit" className="btn btn-done">{t('addChildSubmit')}</button>
+            <button type="button" className="btn" onClick={cancel}>{t('cancel')}</button>
           </div>
         </form>
       ) : (
         <button type="button" className="btn btn-done add-child-btn" onClick={startAdd}>
-          + Add a child
+          {t('addChildBtn')}
         </button>
       )}
 
-      <p className="parent-panel-note">
-        Every new child starts with the same default set of activities. Choosing which
-        activities apply to which child (by age/grade) is coming in a future update.
-      </p>
+      <p className="parent-panel-note">{t('manageChildrenNote')}</p>
     </div>
   )
 }

@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react'
-import { CATEGORY_COLORS, CATEGORY_LABELS, isSuggestedFor, rewardFor } from '../data/activities.js'
+import { CATEGORY_COLORS, isSuggestedFor, rewardFor } from '../data/activities.js'
 import { useCurrency } from '../CurrencyContext.js'
+import { useTranslation } from '../LanguageContext.js'
+import { tActivity, tCategory } from '../i18n.js'
 
 const REMOVE_PREFIX = 'remove:'
 
 // A number box that keeps its own draft while you type and only saves when
 // you leave the box (or press Enter) — so typing "12" doesn't save "1" first.
 export function RewardInput({ value, onCommit }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(String(value))
   const [focused, setFocused] = useState(false)
   const shown = focused ? draft : String(value)
@@ -38,7 +41,7 @@ export function RewardInput({ value, onCommit }) {
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur()
       }}
-      aria-label="Reward"
+      aria-label={t('rewardAria')}
     />
   )
 }
@@ -61,6 +64,7 @@ export default function ActivityManager({
   onCreateCustom,
 }) {
   const cur = useCurrency()
+  const { lang, t } = useTranslation()
   const [overMain, setOverMain] = useState(false)
   const [overSide, setOverSide] = useState(false)
   const [category, setCategory] = useState('all')
@@ -93,12 +97,12 @@ export default function ActivityManager({
     e.preventDefault()
     const label = customForm.label.trim()
     if (!label) {
-      setCustomError('Give it a name.')
+      setCustomError(t('giveItAName'))
       return
     }
     const credit = Number(customForm.fixedCredit)
     if (!Number.isFinite(credit) || credit < 0) {
-      setCustomError('Reward must be a number, 0 or more.')
+      setCustomError(t('rewardMustBeNumber'))
       return
     }
     onCreateCustom({ label, category: customForm.category, hint: customForm.hint, fixedCredit: credit })
@@ -127,10 +131,10 @@ export default function ActivityManager({
     const a = catalog.getById(id)
     if (!a) return
     if (!canRemove) {
-      window.alert('A child needs at least one activity.')
+      window.alert(t('aChildNeedsOneActivity'))
       return
     }
-    if (window.confirm(`Remove "${a.label}" from ${kid.name}'s list? Their past history is kept.`)) {
+    if (window.confirm(t('removeActivityConfirm', { label: tActivity(lang, a, 'label'), name: kid.name }))) {
       onRemove(id)
     }
   }
@@ -148,6 +152,7 @@ export default function ActivityManager({
 
   function renderSuggestion(a) {
     const colors = CATEGORY_COLORS[a.category] || CATEGORY_COLORS.discipline
+    const label = tActivity(lang, a, 'label')
     return (
       <div
         key={a.id}
@@ -163,15 +168,17 @@ export default function ActivityManager({
           {a.icon || colors.icon}
         </span>
         <div className="am-suggestion-body">
-          <strong>{a.label}</strong>
+          <strong>{label}</strong>
           <small>
-            {CATEGORY_LABELS[a.category] || a.category}
-            {' · suggested '}
+            {tCategory(lang, a.category, a.category)}
+            {' · '}
+            {t('suggestedWord')}
+            {' '}
             {cur}
             {a.fixedCredit ?? rate}
           </small>
         </div>
-        <button type="button" className="am-add-btn" onClick={() => onAdd(a.id)} aria-label={`Add ${a.label}`}>
+        <button type="button" className="am-add-btn" onClick={() => onAdd(a.id)} aria-label={t('addActivityAria', { label })}>
           ＋
         </button>
       </div>
@@ -195,18 +202,14 @@ export default function ActivityManager({
         <div className="am-head">
           <h3>
             <span className="avatar" style={{ '--kid-color': kid.color }}>{kid.initial}</span>
-            {kid.name}'s activities
+            {kid.name}
           </h3>
           <small>
-            {activities.length} active · up to {cur}
-            {dailyMax.toFixed(2).replace(/\.00$/, '')} a day
+            {t('activitiesActiveLine', { n: activities.length, cur, amount: dailyMax.toFixed(2).replace(/\.00$/, '') })}
           </small>
         </div>
 
-        <p className="am-hint">
-          Drag an idea from the right into this box (or tap ＋). Set the reward for each
-          activity — that's what a coin is worth for {kid.name}.
-        </p>
+        <p className="am-hint">{t('dragHint', { name: kid.name })}</p>
 
         <div className="am-list">
           {activities.map((a) => {
@@ -216,6 +219,7 @@ export default function ActivityManager({
             const reward = rewardFor(record, a, rate)
             const unlock = unlockValue(a)
             const unlockOverridden = globalUnlockTimes?.[a.id] != null
+            const label = tActivity(lang, a, 'label')
             return (
               <div
                 key={a.id}
@@ -230,38 +234,38 @@ export default function ActivityManager({
                   {a.icon || colors.icon}
                 </span>
                 <div className="am-row-body">
-                  <strong>{a.label}</strong>
-                  <small>{CATEGORY_LABELS[a.category] || a.category}</small>
+                  <strong>{label}</strong>
+                  <small>{tCategory(lang, a.category, a.category)}</small>
                 </div>
 
                 <div className="am-field">
-                  <span>Reward</span>
+                  <span>{t('rewardLabel')}</span>
                   <span className="am-reward-wrap">
                     <span className="am-cur">{cur}</span>
                     <RewardInput value={reward} onCommit={(n) => onReward(a.id, n)} />
                   </span>
                   {own != null && (
                     <button type="button" className="am-reset" onClick={() => onReward(a.id, null)}>
-                      ↺ default
+                      {t('defaultReset')}
                     </button>
                   )}
                 </div>
 
                 <div className="am-field">
-                  <span>{isTimed ? 'On-time by (all children)' : 'Show button after (all children)'}</span>
+                  <span>{isTimed ? t('onTimeByAll') : t('showButtonAfterAll')}</span>
                   <input
                     className="am-time-input"
                     type="time"
                     value={unlock}
-                    aria-label={`${a.label}: ${isTimed ? 'on-time by' : 'show button after'}`}
+                    aria-label={`${label}: ${isTimed ? t('onTimeByWord') : t('showButtonAfterWord')}`}
                     onChange={(e) => onUnlockTime(a.id, e.target.value)}
                   />
                   {unlockOverridden && (
                     <button type="button" className="am-reset" onClick={() => onUnlockTime(a.id, null)}>
-                      ↺ default
+                      {t('defaultReset')}
                     </button>
                   )}
-                  {isTimed && a.lateLabel && <small>+30 min late window after this</small>}
+                  {isTimed && a.lateLabel && <small>{t('lateWindowNote')}</small>}
                 </div>
 
                 <button
@@ -269,8 +273,8 @@ export default function ActivityManager({
                   className="am-remove-btn"
                   onClick={() => requestRemove(a.id)}
                   disabled={!canRemove}
-                  aria-label={`Remove ${a.label}`}
-                  title={canRemove ? 'Remove from this child' : 'A child needs at least one activity'}
+                  aria-label={t('removeActivityAria', { label })}
+                  title={canRemove ? t('removeFromChildTitle') : t('needOneActivityTitle')}
                 >
                   ✕
                 </button>
@@ -279,7 +283,7 @@ export default function ActivityManager({
           })}
         </div>
 
-        <div className="am-dropzone-hint">⬇ Drop a suggested activity here</div>
+        <div className="am-dropzone-hint">{t('dropHereToAdd')}</div>
       </div>
 
       <aside
@@ -295,46 +299,46 @@ export default function ActivityManager({
         onDrop={handleDropOnSide}
       >
         <div className="am-head">
-          <h3>💡 Suggested activities</h3>
+          <h3>{t('suggestedActivitiesTitle')}</h3>
           <small>
-            Picked for {kid.name}
-            {kid.age ? `, age ${kid.age}` : ''}
-            {kid.grade ? `, ${kid.grade}` : ''}
+            {t('pickedForName', { name: kid.name })}
+            {kid.age ? t('agePart', { age: kid.age }) : ''}
+            {kid.grade ? t('gradeCommaPrefix', { grade: kid.grade }) : ''}
           </small>
         </div>
 
         <button type="button" className="am-custom-toggle" onClick={() => setCustomOpen((v) => !v)}>
-          {customOpen ? '✕ Cancel' : '➕ Create a custom activity'}
+          {customOpen ? t('cancelX') : t('createCustomBtn')}
         </button>
 
         {customOpen && (
           <form className="am-custom-form" onSubmit={submitCustom}>
             <label>
-              <span>Activity name</span>
+              <span>{t('activityNameLabel')}</span>
               <input
                 type="text"
                 value={customForm.label}
                 onChange={(e) => setCustomForm({ ...customForm, label: e.target.value })}
-                placeholder="e.g. Feed the fish"
+                placeholder={t('activityNamePlaceholder')}
                 autoFocus
               />
             </label>
             <div className="am-custom-row">
               <label>
-                <span>Category</span>
+                <span>{t('categoryLabel')}</span>
                 <select
                   value={customForm.category}
                   onChange={(e) => setCustomForm({ ...customForm, category: e.target.value })}
                 >
-                  {Object.keys(CATEGORY_LABELS).map((c) => (
+                  {Object.keys(CATEGORY_COLORS).map((c) => (
                     <option key={c} value={c}>
-                      {CATEGORY_LABELS[c]}
+                      {tCategory(lang, c, c)}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                <span>Reward</span>
+                <span>{t('rewardLabel')}</span>
                 <span className="am-reward-wrap">
                   <span className="am-cur">{cur}</span>
                   <input
@@ -350,27 +354,23 @@ export default function ActivityManager({
               </label>
             </div>
             <label>
-              <span>Hint (optional)</span>
+              <span>{t('hintOptionalLabel')}</span>
               <input
                 type="text"
                 value={customForm.hint}
                 onChange={(e) => setCustomForm({ ...customForm, hint: e.target.value })}
-                placeholder="Shown under the activity name"
+                placeholder={t('hintPlaceholder')}
               />
             </label>
             {customError && <p className="login-error">{customError}</p>}
             <button type="submit" className="btn btn-done">
-              Save custom activity
+              {t('saveCustomActivityBtn')}
             </button>
-            <p className="am-custom-note">
-              Saved for your whole family — it'll appear below under Recommended. Drag it into
-              the list on the left (or tap ＋) to add it to {kid.name}, and the same for any
-              other child.
-            </p>
+            <p className="am-custom-note">{t('customNote', { name: kid.name })}</p>
           </form>
         )}
 
-        <div className="am-chips" role="tablist" aria-label="Filter suggestions by category">
+        <div className="am-chips" role="tablist" aria-label={t('filterCategoriesAria')}>
           {categories.map((c) => (
             <button
               key={c}
@@ -378,27 +378,27 @@ export default function ActivityManager({
               className={`am-chip ${category === c ? 'active' : ''}`}
               onClick={() => setCategory(c)}
             >
-              {c === 'all' ? 'All' : CATEGORY_LABELS[c] || c}
+              {c === 'all' ? t('allFilter') : tCategory(lang, c, c)}
             </button>
           ))}
         </div>
 
-        {overSide && <div className="am-remove-hint">Drop here to remove it from {kid.name}'s list</div>}
+        {overSide && <div className="am-remove-hint">{t('dropToRemove', { name: kid.name })}</div>}
 
         <div className="am-suggestions">
           {recShown.length === 0 && otherShown.length === 0 && (
-            <p className="empty-note">Nothing left here — everything is already on {kid.name}'s list.</p>
+            <p className="empty-note">{t('nothingLeftHere', { name: kid.name })}</p>
           )}
-          {recShown.length > 0 && <div className="am-section-label">Recommended for {kid.name}</div>}
+          {recShown.length > 0 && <div className="am-section-label">{t('recommendedFor', { name: kid.name })}</div>}
           {recShown.map(renderSuggestion)}
           {recShown.length === 0 && recommended.length === 0 && otherShown.length > 0 && (
-            <p className="empty-note">No more recommendations — see other ideas below.</p>
+            <p className="empty-note">{t('noMoreRecommendations')}</p>
           )}
         </div>
 
         {otherShown.length > 0 && (
           <details className="am-others">
-            <summary>Other ideas ({otherShown.length}) — outside {kid.name}'s age/grade</summary>
+            <summary>{t('otherIdeas', { n: otherShown.length, name: kid.name })}</summary>
             <div className="am-suggestions">
               {otherShown.map(renderSuggestion)}
             </div>
