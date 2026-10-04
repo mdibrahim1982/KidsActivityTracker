@@ -1585,7 +1585,13 @@ body {
 
 .am-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto auto 30px;
+  /* minmax(0, Nfr) rather than auto: an auto track grows to fit a label's
+     UNWRAPPED width, and Tamil/Malayalam labels (e.g. "show button after")
+     run much longer than the English originals, so the track would blow
+     out and crush the activity-name column to nothing. minmax(0, …) lets
+     the track — and so the label text inside it — actually shrink and
+     wrap instead. */
+  grid-template-columns: 34px minmax(0, 1.1fr) minmax(92px, 0.85fr) minmax(112px, 1fr) 30px;
   gap: 10px;
   align-items: center;
   padding: 10px;
@@ -1610,8 +1616,20 @@ body {
 .am-row-body strong, .am-suggestion-body strong { font-size: 13px; line-height: 1.25; }
 .am-row-body small, .am-suggestion-body small { color: #857C6C; font-size: 11px; }
 
-.am-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #6B6254; }
-.am-field > span:first-child { font-weight: 600; }
+.am-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: #6B6254;
+  min-width: 0; /* flex/grid items default to min-width:auto, which blocks
+                   the label text below from wrapping and shrinking to fit
+                   its track — needed for longer Tamil/Malayalam labels */
+}
+.am-field > span:first-child {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
 .am-field-note small { font-size: 11px; color: #857C6C; }
 .am-reward-wrap { display: inline-flex; align-items: center; gap: 4px; }
 .am-cur { font-size: 12px; color: #6B6254; font-weight: 600; }
